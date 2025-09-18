@@ -1,12 +1,14 @@
-#ifndef ARGUMENTS_H
-#define ARGUMENTS_H
+#ifndef ARGUMENTS_ARGUMENTS_H
+#define ARGUMENTS_ARGUMENTS_H
 
 #include <stdbool.h>
 
-typedef struct {
-  char *file;
-} ProgramArguments;
+typedef struct ProgramArguments ProgramArguments;
 
-bool parseArguments(int *argc, char ***argv, ProgramArguments *arguments);
+ProgramArguments *program_arguments_create(void);
+void program_arguments_destroy(ProgramArguments *self);
 
-#endif
+bool program_arguments_parse(ProgramArguments *self, int argc, char **argv);
+const char *program_arguments_get_file_path(const ProgramArguments *self);
+
+#endif // ARGUMENTS_ARGUMENTS_H
