@@ -1,78 +1,324 @@
-#include <inttypes.h>
-#include <stdio.h>
-
 #include "unicode.h"
 
-#define REPLACEMENT_CHAR 0xFFFDu
+#include <stdio.h>
+#include <stdlib.h>
 
-uint32_t decodeUTF8Text(const unsigned char *currentByte, size_t bytesRemaining,
-                        int *currentSymbolByteLength) {
-  if (bytesRemaining == 0) {
-    *currentSymbolByteLength = 0;
+#include "types.h"
+
+#define UNICODE_FIRST_BYTE_LIMIT 0x7F
+#define UNICODE_SECOND_BYTE_LIMIT 0x7FF
+#define UNICODE_THIRD_BYTE_LIMIT 0xFFFF
+
+#define UNICODE_TWO_BYTE_MASK 0xE0
+#define UNICODE_TWO_BYTE_PATTERN 0xC0
+#define UNICODE_THREE_BYTE_MASK 0xF0
+#define UNICODE_THREE_BYTE_PATTERN 0xE0
+#define UNICODE_FOUR_BYTE_MASK 0xF8
+#define UNICODE_FOUR_BYTE_PATTERN 0xF0
+#define UNICODE_CONTINUATION_MASK 0xC0
+#define UNICODE_CONTINUATION_PATTERN 0x80
+
+#define UNICODE_FIRST_BYTE_DATA_MASK_2 0x1F
+#define UNICODE_FIRST_BYTE_DATA_MASK_3 0x0F
+#define UNICODE_FIRST_BYTE_DATA_MASK_4 0x07
+#define UNICODE_CONTINUATION_DATA_MASK 0x3F
+
+#define UNICODE_SHIFT_SIX_BITS 6
+#define UNICODE_SHIFT_TWELVE_BITS 12
+#define UNICODE_SHIFT_EIGHTEEN_BITS 18
+
+struct UnicodeStatistics
+{
+  Symbol symbols[UNICODE_MAX_UNIQUE_SYMBOLS];
+  Size unique_count;
+  Size total_count;
+};
+
+struct UnicodeDecoder
+{
+  // Можем добавить состояние декодера при необходимости
+};
+
+static uint32_t decode_utf8_byte_sequence(const Byte* current_byte,
+                                          Size bytes_remaining,
+                                          int* symbol_length)
+{
+  if (bytes_remaining == 0)
+  {
+    *symbol_length = 0;
     return 0;
   }
-  unsigned char c0 = currentByte[0];
-  if (c0 <= 0x7F) {
-    *currentSymbolByteLength = 1;
-    return c0;
+
+  Byte first_byte = current_byte[0];
+
+  if (first_byte <= UNICODE_FIRST_BYTE_LIMIT)
+  {
+    *symbol_length = 1;
+    return first_byte;
   }
-  if ((c0 & 0xE0) == 0xC0 && bytesRemaining >= 2) {
-    unsigned char c1 = currentByte[1];
-    if ((c1 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
+
+  if ((first_byte & UNICODE_TWO_BYTE_MASK) == UNICODE_TWO_BYTE_PATTERN &&
+      bytes_remaining >= 2)
+  {
+    Byte second_byte = current_byte[1];
+    if ((second_byte & UNICODE_CONTINUATION_MASK) !=
+        UNICODE_CONTINUATION_PATTERN)
+    {
+      *symbol_length = 1;
+      return UNICODE_REPLACEMENT_CHAR;
     }
-    *currentSymbolByteLength = 2;
-    return ((c0 & 0x1F) << 6) | (c1 & 0x3F);
+    *symbol_length = 2;
+    return ((first_byte & UNICODE_FIRST_BYTE_DATA_MASK_2)
+            << UNICODE_SHIFT_SIX_BITS) |
+           (second_byte & UNICODE_CONTINUATION_DATA_MASK);
   }
-  if ((c0 & 0xF0) == 0xE0 && bytesRemaining >= 3) {
-    unsigned char c1 = currentByte[1], c2 = currentByte[2];
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
+
+  if ((first_byte & UNICODE_THREE_BYTE_MASK) == UNICODE_THREE_BYTE_PATTERN &&
+      bytes_remaining >= 3)
+  {
+    Byte second_byte = current_byte[1];
+    Byte third_byte = current_byte[2];
+    if ((second_byte & UNICODE_CONTINUATION_MASK) !=
+          UNICODE_CONTINUATION_PATTERN ||
+        (third_byte & UNICODE_CONTINUATION_MASK) !=
+          UNICODE_CONTINUATION_PATTERN)
+    {
+      *symbol_length = 1;
+      return UNICODE_REPLACEMENT_CHAR;
     }
-    *currentSymbolByteLength = 3;
-    return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
+    *symbol_length = 3;
+    return ((first_byte & UNICODE_FIRST_BYTE_DATA_MASK_3)
+            << UNICODE_SHIFT_TWELVE_BITS) |
+           ((second_byte & UNICODE_CONTINUATION_DATA_MASK)
+            << UNICODE_SHIFT_SIX_BITS) |
+           (third_byte & UNICODE_CONTINUATION_DATA_MASK);
   }
-  if ((c0 & 0xF8) == 0xF0 && bytesRemaining >= 4) {
-    unsigned char c1 = currentByte[1], c2 = currentByte[2], c3 = currentByte[3];
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
+
+  if ((first_byte & UNICODE_FOUR_BYTE_MASK) == UNICODE_FOUR_BYTE_PATTERN &&
+      bytes_remaining >= 4)
+  {
+    Byte second_byte = current_byte[1];
+    Byte third_byte = current_byte[2];
+    Byte fourth_byte = current_byte[3];
+    if ((second_byte & UNICODE_CONTINUATION_MASK) !=
+          UNICODE_CONTINUATION_PATTERN ||
+        (third_byte & UNICODE_CONTINUATION_MASK) !=
+          UNICODE_CONTINUATION_PATTERN ||
+        (fourth_byte & UNICODE_CONTINUATION_MASK) !=
+          UNICODE_CONTINUATION_PATTERN)
+    {
+      *symbol_length = 1;
+      return UNICODE_REPLACEMENT_CHAR;
     }
-    *currentSymbolByteLength = 4;
-    return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) |
-           (c3 & 0x3F);
+    *symbol_length = 4;
+    return ((first_byte & UNICODE_FIRST_BYTE_DATA_MASK_4)
+            << UNICODE_SHIFT_EIGHTEEN_BITS) |
+           ((second_byte & UNICODE_CONTINUATION_DATA_MASK)
+            << UNICODE_SHIFT_TWELVE_BITS) |
+           ((third_byte & UNICODE_CONTINUATION_DATA_MASK)
+            << UNICODE_SHIFT_SIX_BITS) |
+           (fourth_byte & UNICODE_CONTINUATION_DATA_MASK);
   }
-  *currentSymbolByteLength = 1;
-  return REPLACEMENT_CHAR;
+
+  *symbol_length = 1;
+  return UNICODE_REPLACEMENT_CHAR;
 }
 
-int getSymbolLength(uint32_t codepoint) {
-  if (codepoint <= 0x7F)
+UnicodeDecoder* unicode_decoder_create(void)
+{
+  UnicodeDecoder* decoder = malloc(sizeof(UnicodeDecoder));
+  return decoder;
+}
+
+void unicode_decoder_destroy(UnicodeDecoder* self)
+{
+  free(self);
+}
+
+Result unicode_decoder_decode(UnicodeDecoder* self, const Byte* data,
+                              Size data_size, uint32_t* codepoint,
+                              int* symbol_length)
+{
+  if (!self || !data || !codepoint || !symbol_length)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  *codepoint = decode_utf8_byte_sequence(data, data_size, symbol_length);
+
+  if (*symbol_length == 0)
+  {
+    return RESULT_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+UnicodeStatistics* unicode_statistics_create(void)
+{
+  UnicodeStatistics* stats = malloc(sizeof(UnicodeStatistics));
+  if (!stats)
+  {
+    return NULL;
+  }
+
+  stats->unique_count = 0;
+  stats->total_count = 0;
+  return stats;
+}
+
+void unicode_statistics_destroy(UnicodeStatistics* self)
+{
+  free(self);
+}
+
+Result unicode_statistics_add_symbol(UnicodeStatistics* self,
+                                     uint32_t codepoint)
+{
+  if (!self)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  for (Size i = 0; i < self->unique_count; i++)
+  {
+    if (self->symbols[i].codepoint == codepoint)
+    {
+      self->symbols[i].count++;
+      self->total_count++;
+      return RESULT_OK;
+    }
+  }
+
+  if (self->unique_count >= UNICODE_MAX_UNIQUE_SYMBOLS)
+  {
+    return RESULT_ERROR;
+  }
+
+  self->symbols[self->unique_count].codepoint = codepoint;
+  self->symbols[self->unique_count].count = 1;
+  self->unique_count++;
+  self->total_count++;
+
+  return RESULT_OK;
+}
+
+Result unicode_statistics_process_data(UnicodeStatistics* self,
+                                       const Byte* data, Size data_size)
+{
+  if (!self || !data)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  UnicodeDecoder* decoder = unicode_decoder_create();
+  if (!decoder)
+  {
+    return RESULT_MEMORY_ERROR;
+  }
+
+  Size position = 0;
+  while (position < data_size)
+  {
+    uint32_t codepoint;
+    int symbol_length;
+
+    Result result =
+      unicode_decoder_decode(decoder, data + position, data_size - position,
+                             &codepoint, &symbol_length);
+    if (result != RESULT_OK)
+    {
+      unicode_decoder_destroy(decoder);
+      return result;
+    }
+
+    result = unicode_statistics_add_symbol(self, codepoint);
+    if (result != RESULT_OK)
+    {
+      unicode_decoder_destroy(decoder);
+      return result;
+    }
+
+    position += symbol_length;
+  }
+
+  unicode_decoder_destroy(decoder);
+  return RESULT_OK;
+}
+
+Size unicode_statistics_get_unique_count(const UnicodeStatistics* self)
+{
+  return self ? self->unique_count : 0;
+}
+
+const Symbol* unicode_statistics_get_symbols(const UnicodeStatistics* self)
+{
+  return self ? self->symbols : NULL;
+}
+
+const Symbol* unicode_statistics_find_symbol(const UnicodeStatistics* self,
+                                             uint32_t codepoint)
+{
+  if (!self)
+  {
+    return NULL;
+  }
+
+  for (Size i = 0; i < self->unique_count; i++)
+  {
+    if (self->symbols[i].codepoint == codepoint)
+    {
+      return &self->symbols[i];
+    }
+  }
+
+  return NULL;
+}
+
+int unicode_get_symbol_length(uint32_t codepoint)
+{
+  if (codepoint <= UNICODE_FIRST_BYTE_LIMIT)
+  {
     return 1;
-  if (codepoint <= 0x7FF)
+  }
+  if (codepoint <= UNICODE_SECOND_BYTE_LIMIT)
+  {
     return 2;
-  if (codepoint <= 0xFFFF)
+  }
+  if (codepoint <= UNICODE_THIRD_BYTE_LIMIT)
+  {
     return 3;
+  }
   return 4;
 }
 
-void addUniqueSymbol(UnicodeStatistics *unicodeStatistics, uint32_t codepoint) {
-  for (int i = 0; i < unicodeStatistics->uniqueSymbolsCounter; i++) {
-    if (unicodeStatistics->uniqueSymbols[i].codepoint == codepoint)
-      return;
-  }
-  if (unicodeStatistics->uniqueSymbolsCounter >= MAX_UNIQUE) {
-    printf("Exceeded the number of unique symbols!\n");
-    exit(1);
+bool unicode_is_valid_utf8(const Byte* data, Size data_size)
+{
+  UnicodeDecoder* decoder = unicode_decoder_create();
+  if (!decoder)
+  {
+    return false;
   }
 
-  unicodeStatistics->uniqueSymbols[unicodeStatistics->uniqueSymbolsCounter]
-      .codepoint = codepoint;
-  unicodeStatistics->uniqueSymbols[unicodeStatistics->uniqueSymbolsCounter]
-      .count = 0;
-  unicodeStatistics->uniqueSymbolsCounter++;
-  unicodeStatistics->uniqueSymbols[unicodeStatistics->uniqueSymbolsCounter - 1]
-      .count++;
+  Size position = 0;
+  bool valid = true;
+
+  while (position < data_size && valid)
+  {
+    uint32_t codepoint;
+    int symbol_length;
+
+    Result result =
+      unicode_decoder_decode(decoder, data + position, data_size - position,
+                             &codepoint, &symbol_length);
+    if (result != RESULT_OK || codepoint == UNICODE_REPLACEMENT_CHAR)
+    {
+      valid = false;
+    }
+
+    position += symbol_length;
+  }
+
+  unicode_decoder_destroy(decoder);
+  return valid && (position == data_size);
 }

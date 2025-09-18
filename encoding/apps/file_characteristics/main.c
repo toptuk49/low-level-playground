@@ -8,43 +8,51 @@
 #include "summary.h"
 #include "types.h"
 
-int main(int argc, char **argv) {
-  ProgramArguments *args = program_arguments_create();
-  if (!args) {
-    printf("Failed to create arguments parser\n");
+int main(int argc, char** argv)
+{
+  ProgramArguments* args = program_arguments_create();
+  if (!args)
+  {
+    printf("Произошла ошибка при создании парсера аргументов!\n");
     return EXIT_FAILURE;
   }
 
-  if (!program_arguments_parse(args, argc, argv)) {
+  if (!program_arguments_parse(args, argc, argv))
+  {
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
 
-  File *file = file_create(program_arguments_get_file_path(args));
-  if (!file) {
-    printf("Failed to create file object\n");
+  File* file = file_create(program_arguments_get_file_path(args));
+  if (!file)
+  {
+    printf("Произошла ошибка при создании объекта файла!\n");
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
 
-  if (file_open(file) != RESULT_OK) {
-    printf("Failed to open file: %s\n", program_arguments_get_file_path(args));
+  if (file_open(file) != RESULT_OK)
+  {
+    printf("Произошла ошибка при открытии файла: %s\n",
+           program_arguments_get_file_path(args));
     file_destroy(file);
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
 
-  if (file_read_bytes(file) != RESULT_OK) {
-    printf("Failed to read file\n");
+  if (file_read_bytes(file) != RESULT_OK)
+  {
+    printf("Произошла ошибка при чтении файла!\n");
     file_close(file);
     file_destroy(file);
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
 
-  Statistics *stats = statistics_create();
-  if (!stats) {
-    printf("Failed to create statistics\n");
+  Statistics* stats = statistics_create();
+  if (!stats)
+  {
+    printf("Произошла ошибка при создании объекта статистики!\n");
     file_close(file);
     file_destroy(file);
     program_arguments_destroy(args);
@@ -52,8 +60,9 @@ int main(int argc, char **argv) {
   }
 
   if (statistics_calculate(stats, file_get_buffer(file), file_get_size(file)) !=
-      RESULT_OK) {
-    printf("Failed to calculate statistics\n");
+      RESULT_OK)
+  {
+    printf("Произошла ошибка при вычислении статистики!\n");
     statistics_destroy(stats);
     file_close(file);
     file_destroy(file);
@@ -61,9 +70,10 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  Summary *summary = summary_create();
-  if (!summary) {
-    printf("Failed to create summary\n");
+  Summary* summary = summary_create();
+  if (!summary)
+  {
+    printf("Произошла ошибка при создании отчета!\n");
     statistics_destroy(stats);
     file_close(file);
     file_destroy(file);
@@ -71,8 +81,9 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  if (summary_calculate(summary, stats) != RESULT_OK) {
-    printf("Failed to calculate summary\n");
+  if (summary_calculate(summary, stats) != RESULT_OK)
+  {
+    printf("Произошла ошибка при вычислении отчета!\n");
     summary_destroy(summary);
     statistics_destroy(stats);
     file_close(file);

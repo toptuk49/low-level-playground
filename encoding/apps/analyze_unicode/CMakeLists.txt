@@ -1,7 +1,9 @@
-add_executable(analyze_unicode analyze_unicode.c)
-target_link_libraries(analyze_unicode arguments unicode file)
+add_executable(analyze_unicode main.c)
+
+target_link_libraries(analyze_unicode PRIVATE
+    arguments file unicode common
+)
+
 target_include_directories(analyze_unicode PRIVATE 
-    ../../libs/arguments
-    ../../libs/file
-    ../../libs/unicode
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )

@@ -1,5 +1,5 @@
 add_subdirectory(file_characteristics)
-# add_subdirectory(analyze_unicode) 
+add_subdirectory(analyze_unicode) 
 # add_subdirectory(substrings)
 
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
