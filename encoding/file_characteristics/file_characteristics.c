@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "arguments.h"
+#include "file.h"
 #include "statistics.h"
 #include "summary.h"
 
@@ -12,8 +13,7 @@ int compareByteCounts(const void *leftBytePointer,
                       const void *rightBytePointer);
 
 ProgramArguments args = {.file = NULL};
-
-FILE *file;
+File file;
 Statistics statistics;
 Summary summary;
 
@@ -21,13 +21,9 @@ int main(int argc, char **argv) {
   if (!parseArguments(&argc, &argv, &args))
     return 1;
 
-  file = fopen(args.file, "rb");
-  if (!file) {
-    printf("An error occured while opening the file!\n");
-    return 1;
-  }
+  openFile(&file, args.file);
 
-  statistics = countStatistics(file);
+  statistics = countStatistics(file.descriptor);
   summary = countSummary(statistics);
 
   printf("Файл: %s\n", argv[1]);
@@ -64,7 +60,7 @@ int main(int argc, char **argv) {
            statistics.byteInformationAmounts[i]);
   }
 
-  fclose(file);
+  fclose(file.descriptor);
   return 0;
 }
 
