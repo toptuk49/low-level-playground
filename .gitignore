@@ -1,3 +1,14 @@
+# Binaries
+## Ignore all
+*
+## Unignore all with extensions
+!*.*
+## Unignore directories (to allow traversing directories)
+!*/
+## Unignore makefiles
+!makefile
+!Makefile
+
 # Prerequisites
 *.d
 

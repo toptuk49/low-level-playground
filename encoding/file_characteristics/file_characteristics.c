@@ -8,7 +8,8 @@
 
 #define ALPHABET_SIZE 256
 
-int compareByteCounts(const void *a, const void *b, void *counts);
+int compareByteCounts(const void *leftBytePointer,
+                      const void *rightBytePointer);
 
 ProgramArguments args = {.file = NULL};
 
@@ -42,20 +43,19 @@ int main(int argc, char **argv) {
   printf("G8 = %ldn\n", summary.archiveLengthWithNormalizedFrequenciesTable);
 
   printf("Таблица (по алфавиту):\n");
-  printf("Байт | Count     | p(байта)     | I(байта)\n");
+  printf("Байт | Количество | Вероятность байта | Информация в байте\n");
   for (int i = 0; i < ALPHABET_SIZE; i++) {
-    printf("%02X   | %9ld | %11.6f | %8.4f\n", i, statistics.byteCounts[i],
+    printf("%02X | %9ld | %11.6f | %8.4f\n", i, statistics.byteCounts[i],
            statistics.byteAppearProbabilites[i],
            statistics.byteInformationAmounts[i]);
   }
 
-  printf("\nТаблица (по убыванию count):\n");
-  printf("Байт | Count     | p(байта)     | I(байта)\n");
+  printf("\nТаблица (по убыванию количества символов):\n");
+  printf("Байт | Количество | Вероятность байта | Информация в байте\n");
   int indices[ALPHABET_SIZE];
   for (int i = 0; i < ALPHABET_SIZE; i++)
     indices[i] = i;
-  qsort_r(indices, ALPHABET_SIZE, sizeof(int), compareByteCounts,
-          statistics.byteCounts);
+  qsort(indices, ALPHABET_SIZE, sizeof(int), compareByteCounts);
 
   for (int k = 0; k < ALPHABET_SIZE; k++) {
     int i = indices[k];
@@ -68,15 +68,14 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-int compareByteCounts(const void *leftBytePointer, const void *rightBytePointer,
-                      void *countsPointer) {
+int compareByteCounts(const void *leftBytePointer,
+                      const void *rightBytePointer) {
   int leftByte = *(const int *)leftBytePointer;
   int rightByte = *(const int *)rightBytePointer;
-  long *counts = (long *)countsPointer;
 
-  if (counts[rightByte] > counts[leftByte])
+  if (statistics.byteCounts[rightByte] > statistics.byteCounts[leftByte])
     return 1;
-  if (counts[rightByte] < counts[leftByte])
+  if (statistics.byteCounts[rightByte] < statistics.byteCounts[leftByte])
     return -1;
 
   return 0;
