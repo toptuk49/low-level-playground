@@ -8,6 +8,8 @@
 ## Unignore makefiles
 !makefile
 !Makefile
+## Build directory
+build/
 
 # Prerequisites
 *.d
