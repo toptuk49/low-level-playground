@@ -7,24 +7,14 @@
 
 #include "arguments.h"
 #include "file.h"
+#include "unicode.h"
 
-#define MAX_UNIQUE 65536
-#define REPLACEMENT_CHAR 0xFFFDu
+UnicodeStatistics initUnicodeStatistics();
 
-typedef struct {
-  uint32_t codepoint;
-  uint64_t count;
-} Symbol;
-
-uint32_t decodeUTF8Text(const unsigned char *currentByte, size_t bytesRemaining,
-                        int *currentSymbolByteLength);
-int getSymbolLength(uint32_t codepoint);
-void addUniqueSymbol(uint32_t codepoint);
-
-ProgramArguments args = {.file = NULL};
 File file;
-Symbol uniqueSymbols[MAX_UNIQUE];
-int uniqueSymbolsCounter = 0;
+ProgramArguments args = {.file = NULL};
+UnicodeStatistics unicodeStatistics;
+uint64_t symbolsAmount = 0;
 
 int main(int argc, char **argv) {
   if (!parseArguments(&argc, &argv, &args))
@@ -33,32 +23,34 @@ int main(int argc, char **argv) {
   openFile(&file, args.file);
   readBytes(&file);
 
-  uint64_t symbolsAmount = 0;
+  unicodeStatistics = initUnicodeStatistics();
+
   size_t currentBufferPosition = 0;
   while (currentBufferPosition < (size_t)file.size) {
     int length = 0;
     uint32_t codepoint =
         decodeUTF8Text(file.buffer + currentBufferPosition,
                        file.size - currentBufferPosition, &length);
-    addUniqueSymbol(codepoint);
+    addUniqueSymbol(&unicodeStatistics, codepoint);
     symbolsAmount++;
     currentBufferPosition += length;
   }
 
   double I_bits = 0.0;
-  for (int i = 0; i < uniqueSymbolsCounter; i++) {
-    double p = (double)uniqueSymbols[i].count / symbolsAmount;
+  for (int i = 0; i < unicodeStatistics.uniqueSymbolsCounter; i++) {
+    double p = (double)unicodeStatistics.uniqueSymbols[i].count / symbolsAmount;
     double info = -log2(p);
-    I_bits += uniqueSymbols[i].count * info;
+    I_bits += unicodeStatistics.uniqueSymbols[i].count * info;
   }
 
   double I_bytes = I_bits / 8.0;
   uint64_t E = (uint64_t)ceil(I_bytes);
 
   uint64_t table_utf8 = 8; /* |A1| 64-bit */
-  for (int i = 0; i < uniqueSymbolsCounter; i++)
-    table_utf8 += getSymbolLength(uniqueSymbols[i].codepoint) + 8;
-  uint64_t table_utf32 = 8 + uniqueSymbolsCounter * (4 + 8);
+  for (int i = 0; i < unicodeStatistics.uniqueSymbolsCounter; i++)
+    table_utf8 +=
+        getSymbolLength(unicodeStatistics.uniqueSymbols[i].codepoint) + 8;
+  uint64_t table_utf32 = 8 + unicodeStatistics.uniqueSymbolsCounter * (4 + 8);
   uint64_t G_utf8 = E + table_utf8;
   uint64_t G_utf32 = E + table_utf32;
 
@@ -77,12 +69,15 @@ int main(int argc, char **argv) {
   printf("\nТаблица символов по коду:\n");
   printf("Код символа | Количество | Вероятность | Количество информации (бит) "
          "| Длина символа (байт)\n");
-  for (int i = 0; i < uniqueSymbolsCounter; i++) {
-    double probability = (double)uniqueSymbols[i].count / symbolsAmount;
+  for (int i = 0; i < unicodeStatistics.uniqueSymbolsCounter; i++) {
+    double probability =
+        (double)unicodeStatistics.uniqueSymbols[i].count / symbolsAmount;
     double info = -log2(probability);
-    printf("U+%04X | %llu | %.6f | %.4f | %d\n", uniqueSymbols[i].codepoint,
-           (unsigned long long)uniqueSymbols[i].count, probability, info,
-           getSymbolLength(uniqueSymbols[i].codepoint));
+    printf("U+%04X | %llu | %.6f | %.4f | %d\n",
+           unicodeStatistics.uniqueSymbols[i].codepoint,
+           (unsigned long long)unicodeStatistics.uniqueSymbols[i].count,
+           probability, info,
+           getSymbolLength(unicodeStatistics.uniqueSymbols[i].codepoint));
   }
 
   free(file.buffer);
@@ -90,71 +85,7 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-uint32_t decodeUTF8Text(const unsigned char *currentByte, size_t bytesRemaining,
-                        int *currentSymbolByteLength) {
-  if (bytesRemaining == 0) {
-    *currentSymbolByteLength = 0;
-    return 0;
-  }
-  unsigned char c0 = currentByte[0];
-  if (c0 <= 0x7F) {
-    *currentSymbolByteLength = 1;
-    return c0;
-  }
-  if ((c0 & 0xE0) == 0xC0 && bytesRemaining >= 2) {
-    unsigned char c1 = currentByte[1];
-    if ((c1 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
-    }
-    *currentSymbolByteLength = 2;
-    return ((c0 & 0x1F) << 6) | (c1 & 0x3F);
-  }
-  if ((c0 & 0xF0) == 0xE0 && bytesRemaining >= 3) {
-    unsigned char c1 = currentByte[1], c2 = currentByte[2];
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
-    }
-    *currentSymbolByteLength = 3;
-    return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
-  }
-  if ((c0 & 0xF8) == 0xF0 && bytesRemaining >= 4) {
-    unsigned char c1 = currentByte[1], c2 = currentByte[2], c3 = currentByte[3];
-    if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) {
-      *currentSymbolByteLength = 1;
-      return REPLACEMENT_CHAR;
-    }
-    *currentSymbolByteLength = 4;
-    return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) |
-           (c3 & 0x3F);
-  }
-  *currentSymbolByteLength = 1;
-  return REPLACEMENT_CHAR;
-}
-
-int getSymbolLength(uint32_t codepoint) {
-  if (codepoint <= 0x7F)
-    return 1;
-  if (codepoint <= 0x7FF)
-    return 2;
-  if (codepoint <= 0xFFFF)
-    return 3;
-  return 4;
-}
-
-void addUniqueSymbol(uint32_t codepoint) {
-  for (int i = 0; i < uniqueSymbolsCounter; i++) {
-    if (uniqueSymbols[i].codepoint == codepoint)
-      return;
-  }
-  if (uniqueSymbolsCounter >= MAX_UNIQUE) {
-    printf("Exceeded the number of unique symbols!\n");
-    exit(1);
-  }
-
-  uniqueSymbols[uniqueSymbolsCounter].codepoint = codepoint;
-  uniqueSymbols[uniqueSymbolsCounter].count = 0;
-  uniqueSymbolsCounter++;
-  uniqueSymbols[uniqueSymbolsCounter - 1].count++;
+UnicodeStatistics initUnicodeStatistics() {
+  UnicodeStatistics s = {.uniqueSymbolsCounter = 0};
+  return s;
 }

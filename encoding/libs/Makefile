@@ -13,14 +13,19 @@ else
 	SO_EXTENSION = so
 endif
 
-all: $(BUILD_DIR) libarguments.so libfile.so 
+all: $(BUILD_DIR) libarguments.so libfile.so libunicode.so
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 libarguments.so:
 	$(CC) $(CFLAGS) arguments/arguments.c -o $(BUILD_DIR)/libarguments.so -Iarguments $(SONAME_FLAG)libarguments.so
+
 libfile.so:
 	$(CC) $(CFLAGS) file/file.c -o $(BUILD_DIR)/libfile.so -Ifile $(SONAME_FLAG)libfile.so
+
+libunicode.so:
+	$(CC) $(CFLAGS) unicode/unicode.c -o $(BUILD_DIR)/libunicode.so -Iunicode $(SONAME_FLAG)libunicode.so
+
 clean:
 	rm $(BUILD_DIR)/*.$(SO_EXTENSION)

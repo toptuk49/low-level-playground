@@ -6,10 +6,10 @@ ABS_LIB_DIR=$(shell cd $(LIB_DIR) && pwd)
 all: analyze_unicode set_ld_library_path
 
 analyze_unicode: analyze_unicode.o
-	$(CC) analyze_unicode.o -L$(LIB_DIR) -larguments -lfile -o analyze_unicode $(CFLAGS) -Wl,-rpath,$(ABS_LIB_DIR)
+	$(CC) analyze_unicode.o -L$(LIB_DIR) -larguments -lfile -lunicode -o analyze_unicode $(CFLAGS) -Wl,-rpath,$(ABS_LIB_DIR)
 
 analyze_unicode.o:
-	$(CC) -c analyze_unicode.c -o analyze_unicode.o -I../libs/arguments -I../libs/file $(CFLAGS)
+	$(CC) -c analyze_unicode.c -o analyze_unicode.o -I../libs/arguments -I../libs/file -I../libs/unicode $(CFLAGS)
 
 set_ld_library_path:
 	CURRENT_DIR="$(shell pwd)$(LIB_DIR)"
