@@ -1,10 +1,26 @@
 CC=gcc
-CFLAGS=-I. -std=c99
+CFLAGS=-shared -fPIC -std=c99
+BUILD_DIR=build
 
-all: arguments
+UNAME_S := $(shell uname)
+LIB_DIR="$(shell pwd)/$(BUILD_DIR)"
 
-arguments: arguments.h
-	$(CC) -shared -fPIC arguments.c -o libarguments.so $(CFLAGS)
+ifeq ($(UNAME_S),Darwin)
+	SONAME_FLAG = -Wl,-install_name,$(LIB_DIR)/
+	SO_EXTENSION = so
+else
+	SONAME_FLAG = -Wl,-soname,
+	SO_EXTENSION = so
+endif
 
+all: $(BUILD_DIR) libarguments.so libfile.so 
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+libarguments.so:
+	$(CC) $(CFLAGS) arguments/arguments.c -o $(BUILD_DIR)/libarguments.so -Iarguments $(SONAME_FLAG)libarguments.so
+libfile.so:
+	$(CC) $(CFLAGS) file/file.c -o $(BUILD_DIR)/libfile.so -Ifile $(SONAME_FLAG)libfile.so
 clean:
-	rm *.so
+	rm $(BUILD_DIR)/*.$(SO_EXTENSION)
