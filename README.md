@@ -123,7 +123,7 @@ Each directory contains an independent experiment with its own Makefile.
 
 ## 🛣 Roadmap
 
-- [ ] Import files from other repositories
+- [*] Import files from other repositories
 
 - [ ] Add CI for automatic build testing
 
