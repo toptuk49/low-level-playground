@@ -1,7 +1,7 @@
 add_executable(file_characteristics main.c statistics.c summary.c)
 
 target_link_libraries(file_characteristics PRIVATE
-    arguments file common
+    arguments file common m
 )
 
 target_include_directories(file_characteristics PRIVATE
