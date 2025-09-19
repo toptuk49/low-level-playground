@@ -1,6 +1,9 @@
-add_executable(substrings substrings.c)
-target_link_libraries(substrings arguments file)
-target_include_directories(substrings PRIVATE 
-    ../../libs/arguments
-    ../../libs/file
+add_executable(substrings main.c markov_model.c)
+
+target_link_libraries(substrings PRIVATE
+    arguments file common m
+)
+
+target_include_directories(substrings PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
