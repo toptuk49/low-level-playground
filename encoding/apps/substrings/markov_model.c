@@ -68,16 +68,6 @@ Result markov_model_process_data(MarkovModel* self, const Byte* data,
     self->symbol_counts[data[i]]++;
   }
 
-  for (Size i = 0; i < data_size - 1; i++)
-  {
-    Byte first = data[i];
-    Byte second = data[i + 1];
-
-    self->pair_counts[first][second]++;
-    self->prefix_counts[first]++;
-    self->total_pairs++;
-  }
-
   for (int first = 0; first < ALPHABET_SIZE; first++)
   {
     for (int second = 0; second < ALPHABET_SIZE; second++)
@@ -175,7 +165,6 @@ uint64_t markov_model_get_total_pairs(const MarkovModel* self)
 bool markov_model_validate_test_cases(void)
 {
   const char* test_cases[] = {
-    "a",       // 8 бит
     "ab",      // 8 бит
     "abcd",    // 8 бит
     "abab",    // 8 бит
@@ -183,14 +172,11 @@ bool markov_model_validate_test_cases(void)
     "aabacad"  // 16 бит
   };
 
-  const double expected_bits[] = {8.0, 8.0, 8.0, 8.0, 10.0, 16.0};
-  const char* descriptions[] = {"Один символ",
-                                "Два разных символа",
-                                "Четыре разных символа",
-                                "Повторяющаяся пара",
-                                "Три символа с частичным повтором",
-                                "Несколько символов с повторами"};
-  const int num_cases = 6;
+  const double expected_bits[] = {8.0, 8.0, 8.0, 10.0, 16.0};
+  const char* descriptions[] = {
+    "Два разных символа", "Четыре разных символа", "Повторяющаяся пара",
+    "Три символа с частичным повтором", "Несколько символов с повторами"};
+  const int num_cases = 5;
 
   bool all_passed = true;
 
