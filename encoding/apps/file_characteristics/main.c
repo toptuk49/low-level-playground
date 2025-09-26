@@ -1,6 +1,8 @@
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "arguments.h"
 #include "file.h"
@@ -94,17 +96,54 @@ int main(int argc, char** argv)
 
   const Byte byte = 8;
   printf("Файл: %s\n", program_arguments_get_file_path(args));
-  printf("Длина файла n = %ld байт\n", statistics_get_byte_length(stats));
-  printf("L(Q)[бит] = %ld\n", statistics_get_byte_length(stats) * byte);
-  printf("I(Q)[бит] = %.2f\n", summary_get_information_bits(summary));
-  printf("Дробная часть I(Q)[бит] = %.2e\n",
+  printf("Длина файла n = %ld [байт]\n", statistics_get_byte_length(stats));
+  printf("L(Q) = %ld [бит]\n", statistics_get_byte_length(stats) * byte);
+  printf("I(Q) = %.2f [бит]\n", summary_get_information_bits(summary));
+  printf("Дробная часть I(Q) = %.2e [бит]\n",
          fmod(summary_get_information_bits(summary), 1.0));
-  printf("L(Q)[октетов] = %ld\n", statistics_get_byte_length(stats));
-  printf("I(Q)[октетов] = %.2f\n", summary_get_information_bytes(summary));
+  printf("L(Q) = %ld [октетов]\n", statistics_get_byte_length(stats));
+  printf("I(Q) = %.2f [октетов]\n", summary_get_information_bytes(summary));
   printf("E (нижняя граница) = %ld\n",
          summary_get_compressed_min_size(summary));
-  printf("G64 = %ld\n", summary_get_archive_length_non_standard(summary));
-  printf("G8 = %ldn\n", summary_get_archive_length_normalized(summary));
+  printf("G64 = %" PRIu64 " [октетов]\n",
+         summary_get_archive_length_non_standard(summary));
+  printf("G8 = %" PRIu64 " [октетов]\n",
+         summary_get_archive_length_normalized(summary));
+
+  printf("Таблица (по алфавиту):\n");
+  printf("Байт | Количество | Вероятность байта | Информация в байте\n");
+  for (int i = 0; i < ALPHABET_SIZE; i++)
+  {
+    if (statistics_get_byte_count(stats, i) == 0)
+    {
+      continue;
+    }
+
+    printf("%02X | %9ld | %11.6f | %8.4f\n", i,
+           statistics_get_byte_count(stats, i),
+           statistics_get_byte_probability(stats, i),
+           statistics_get_byte_information(stats, i));
+  }
+
+  printf("\nТаблица (по убыванию количества символов):\n");
+  printf("Байт | Количество | Вероятность байта | Информация в байте\n");
+
+  int sorted_indices[ALPHABET_SIZE];
+  statistics_get_sorted_indices(stats, sorted_indices);
+
+  for (int i = 0; i < ALPHABET_SIZE; i++)
+  {
+    int index = sorted_indices[i];
+    if (statistics_get_byte_count(stats, index) == 0)
+    {
+      continue;
+    }
+
+    printf("%02X   | %9ld | %11.6f | %8.4f\n", index,
+           statistics_get_byte_count(stats, index),
+           statistics_get_byte_probability(stats, index),
+           statistics_get_byte_information(stats, index));
+  }
 
   summary_destroy(summary);
   statistics_destroy(stats);

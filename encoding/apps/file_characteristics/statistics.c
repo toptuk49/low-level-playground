@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "types.h"
 
@@ -26,6 +27,13 @@ Statistics* statistics_create(void)
 
   statistics_reset(stats);
   return stats;
+}
+
+Statistics* statistics_copy(const Statistics* src)
+{
+  Statistics* statsCopy = statistics_create();
+  memcpy(statsCopy, src, sizeof(Statistics));
+  return statsCopy;
 }
 
 void statistics_destroy(Statistics* self)
@@ -77,6 +85,11 @@ Result statistics_calculate(Statistics* self, const Byte* data, Size data_size)
   return RESULT_OK;
 }
 
+int byte_comparator(const void* left, const void* right)
+{
+  return (*(int*)right - *(int*)left);
+}
+
 unsigned long statistics_get_byte_length(const Statistics* self)
 {
   return self ? self->byte_length : 0;
@@ -95,4 +108,36 @@ double statistics_get_byte_probability(const Statistics* self, Byte byte)
 double statistics_get_byte_information(const Statistics* self, Byte byte)
 {
   return self ? self->byte_information[byte] : 0.0;
+}
+
+static const Statistics* g_stats_for_sort;
+
+static int compare_indices_desc(const void* left, const void* right)
+{
+  int index_a = *(const int*)left;
+  int index_b = *(const int*)right;
+
+  long count_a = g_stats_for_sort->byte_counts[index_a];
+  long count_b = g_stats_for_sort->byte_counts[index_b];
+
+  if (count_b > count_a)
+  {
+    return 1;
+  }
+  if (count_b < count_a)
+  {
+    return -1;
+  }
+  return 0;
+}
+
+void statistics_get_sorted_indices(const Statistics* self, int* indices_out)
+{
+  for (int i = 0; i < ALPHABET_SIZE; i++)
+  {
+    indices_out[i] = i;
+  }
+
+  g_stats_for_sort = self;
+  qsort(indices_out, ALPHABET_SIZE, sizeof(int), compare_indices_desc);
 }
