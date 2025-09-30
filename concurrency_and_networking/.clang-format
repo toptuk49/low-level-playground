@@ -1,0 +1,18 @@
+BasedOnStyle: Google
+
+# Always use braces
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+
+# Braces breaks
+BreakBeforeBraces: Allman
+
+# Offset
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+PointerAlignment: Left
