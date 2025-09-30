@@ -1,0 +1,32 @@
+Checks: >
+  -*,
+  clang-analyzer-*,
+  readability-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  bugprone-*,
+  cert-*,
+  misc-*,
+  -readability-identifier-naming,  # отдельно настроим
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays
+
+WarningsAsErrors: "*"
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: PascalCase
+  - key: readability-identifier-naming.StructCase
+    value: PascalCase
+  - key: readability-identifier-naming.EnumCase
+    value: PascalCase
+  - key: readability-identifier-naming.FunctionCase
+    value: camelCase
+  - key: readability-identifier-naming.VariableCase
+    value: camelCase
+  - key: readability-identifier-naming.MemberCase
+    value: camelCase
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
