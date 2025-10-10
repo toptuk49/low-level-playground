@@ -57,3 +57,6 @@ build/
 
 # Clang
 .cache/
+
+# SQL files
+*.sql
