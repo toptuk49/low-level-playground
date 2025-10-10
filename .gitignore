@@ -8,6 +8,8 @@
 ## Unignore makefiles
 !makefile
 !Makefile
+## Unignore Brewfile
+!Brewfile
 ## Build directory
 build/
 
