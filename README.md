@@ -6,7 +6,7 @@
   <h3 align="center">Low-Level Playground</h3>
 
   <p align="center">
-    💻 A playground for exploring low-level programming concepts: command-line tools, concurrency, networking, encoding, and assembly.<br />
+    💻 A playground for exploring low-level programming concepts: command-line tools, concurrency, networking, encoding, assembly and database systems.<br />
     <br />
     <a href="#about-the-project"><strong>Explore the docs »</strong></a>
     <br />
@@ -54,6 +54,7 @@ Main topics covered:
 - 🧵 Processes, threads, synchronization & deadlocks
 - 🌐 Client-server communication (TCP, UDP, simple HTTP-like)
 - ⚙️ Computer architecture & Assembly (mixing with C)
+- 🗃️ Database systems - PostgreSQL integration, C API
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -61,10 +62,12 @@ Main topics covered:
 
 This project relies on **C**, **Assembly**, and standard Linux toolchain.
 
-- GCC / Clang
-- GNU Make
-- POSIX APIs (fork, exec, pthreads, sockets)
-- NASM / GAS
+- **GCC / Clang** - C compilation
+- **GNU Make** - Build automation
+- **POSIX APIs** - fork, exec, pthreads, sockets
+- **NASM / GAS** - Assembly programming
+- **PostgreSQL + libpq** - Database connectivity
+- **CMake** - Advanced build configuration
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -94,19 +97,25 @@ cd low-level-playground
 2. Navigate to a specific module, e.g.:
 
 ```sh
-cd concurrency_and_networking/parallel_min_max
+cd concurrency_and_networking/lab4/src
 ```
 
 3. Build:
 
 ```sh
+# If module contains Makefiles:
+make
+
+# If module contains CMakeLists.txt:
+mkdir -p build && cd build
+cmake ..
 make
 ```
 
 4. Run:
 
 ```sh
-./parallel_min_max
+./build/path/to/executable
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
