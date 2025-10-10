@@ -11,12 +11,53 @@ struct Connection
   PGconn *connection;
 };
 
+static ConnectionStatus pq_status_to_connection_status(ConnStatusType pq_status)
+{
+  switch (pq_status)
+  {
+    case CONNECTION_OK:
+      return CONNECTION_STATUS_OK;
+    case CONNECTION_BAD:
+      return CONNECTION_STATUS_BAD;
+    default:
+      return CONNECTION_STATUS_CONNECTING;
+  }
+}
+
+static const char *pq_status_to_string(ConnStatusType pq_status)
+{
+  switch (pq_status)
+  {
+    case CONNECTION_OK:
+      return "OK";
+    case CONNECTION_BAD:
+      return "BAD";
+    case CONNECTION_STARTED:
+      return "STARTED";
+    case CONNECTION_MADE:
+      return "MADE";
+    case CONNECTION_AWAITING_RESPONSE:
+      return "AWAITING_RESPONSE";
+    case CONNECTION_AUTH_OK:
+      return "AUTH_OK";
+    case CONNECTION_SETENV:
+      return "SETENV";
+    case CONNECTION_SSL_STARTUP:
+      return "SSL_STARTUP";
+    case CONNECTION_NEEDED:
+      return "NEEDED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 Connection *connection_create(char *parameters)
 {
   Connection *connection = (Connection *)malloc(sizeof(Connection));
   if (connection == NULL)
   {
-    printf("Произошла ошибка при создании объекта Connection!");
+    printf("Error creating Connection object!");
+    return NULL;
   }
 
   connection->connection = PQconnectdb(parameters);
@@ -25,18 +66,11 @@ Connection *connection_create(char *parameters)
 
 void print_connection_status(Connection *connection)
 {
-  printf("Connection status: ");
-  switch (PQstatus(connection->connection))
-  {
-    case CONNECTION_OK:
-      printf("OK\n");
-      break;
-    case CONNECTION_BAD:
-      printf("BAD\n");
-      break;
-    default:
-      printf("OTHER (%d)\n", PQstatus(connection->connection));
-  }
+  ConnStatusType pq_status = PQstatus(connection->connection);
+  ConnectionStatus our_status = pq_status_to_connection_status(pq_status);
+
+  printf("Connection status: %s (our: %s)\n", pq_status_to_string(pq_status),
+         get_connection_status_string(our_status));
 
   printf("Database: %s\n", PQdb(connection->connection));
   printf("User: %s\n", PQuser(connection->connection));
@@ -47,15 +81,17 @@ void print_connection_status(Connection *connection)
 void print_query(Connection *connection, char *query)
 {
   PGresult *result = PQexec(connection->connection, query);
-  int rows = PQntuples(result);
-  int columns = PQnfields(result);
 
   if (PQresultStatus(result) != PGRES_TUPLES_OK)
   {
-    printf("No data retrieved!\n");
+    printf("No data retrieved! Error: %s\n",
+           PQerrorMessage(connection->connection));
     PQclear(result);
     exit_with_error(connection);
   }
+
+  int rows = PQntuples(result);
+  int columns = PQnfields(result);
 
   for (int i = 0; i < rows; i++)
   {
@@ -63,7 +99,6 @@ void print_query(Connection *connection, char *query)
     {
       printf("%s ", PQgetvalue(result, i, j));
     }
-
     printf("\n");
   }
 
@@ -72,8 +107,23 @@ void print_query(Connection *connection, char *query)
 
 ConnectionStatus get_connection_status(Connection *connection)
 {
-  ConnStatusType status = PQstatus(connection->connection);
-  return (status == CONNECTION_OK) ? OK : BAD;
+  ConnStatusType pq_status = PQstatus(connection->connection);
+  return pq_status_to_connection_status(pq_status);
+}
+
+const char *get_connection_status_string(ConnectionStatus status)
+{
+  switch (status)
+  {
+    case CONNECTION_STATUS_OK:
+      return "OK";
+    case CONNECTION_STATUS_BAD:
+      return "BAD";
+    case CONNECTION_STATUS_CONNECTING:
+      return "CONNECTING";
+    default:
+      return "UNKNOWN";
+  }
 }
 
 char *get_error_message(Connection *connection)
@@ -89,5 +139,11 @@ void exit_with_error(Connection *connection)
 
 void finish_connection(Connection *connection)
 {
-  PQfinish(connection->connection);
+  if (connection && connection->connection)
+  {
+    PQfinish(connection->connection);
+    connection->connection = NULL;
+  }
+
+  free(connection);
 }

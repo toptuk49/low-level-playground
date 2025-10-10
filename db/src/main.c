@@ -19,7 +19,7 @@ int main()
   printf("Connection attempt completed.\n");
   print_connection_status(connection);
 
-  if (get_connection_status(connection) == BAD)
+  if (get_connection_status(connection) == CONNECTION_STATUS_BAD)
   {
     int print_result = fprintf(stderr, "Connecton to database failed: %s\n",
                                get_error_message(connection));

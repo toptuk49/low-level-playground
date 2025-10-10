@@ -3,8 +3,9 @@
 
 typedef enum
 {
-  OK,
-  BAD
+  CONNECTION_STATUS_OK,
+  CONNECTION_STATUS_BAD,
+  CONNECTION_STATUS_CONNECTING
 } ConnectionStatus;
 
 #endif  // POSTGRES_TYPES_H

@@ -9,6 +9,7 @@ Connection *connection_create(char *parameters);
 void print_connection_status(Connection *connection);
 void print_query(Connection *connection, char *query);
 ConnectionStatus get_connection_status(Connection *connection);
+const char *get_connection_status_string(ConnectionStatus status);
 char *get_error_message(Connection *connection);
 void exit_with_error(Connection *connection);
 void finish_connection(Connection *connection);
