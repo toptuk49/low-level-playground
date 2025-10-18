@@ -52,7 +52,7 @@ void file_destroy(File* self)
   free(self);
 }
 
-Result file_open(File* self)
+Result file_open_for_read(File* self)
 {
   if (!self)
   {
@@ -118,6 +118,55 @@ Result file_read_bytes(File* self)
   {
     free(self->buffer);
     self->buffer = NULL;
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+Result file_open_for_write(File* self)
+{
+  if (!self)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  self->descriptor = fopen(self->path, "wb");
+  if (!self->descriptor)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+Result file_write_bytes(File* self, const Byte* data, Size data_size)
+{
+  if (!self || !self->descriptor || !data)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  size_t bytes_written = fwrite(data, 1, data_size, self->descriptor);
+  if (bytes_written != data_size)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+Result file_write_from_file(File* self, const File* source)
+{
+  if (!self || !self->descriptor || !source || !source->buffer)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  size_t bytes_written =
+    fwrite(source->buffer, 1, source->size, self->descriptor);
+  if (bytes_written != source->size)
+  {
     return RESULT_IO_ERROR;
   }
 
