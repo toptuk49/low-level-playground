@@ -66,6 +66,8 @@ int main(int argc, char** argv)
       return EXIT_FAILURE;
   }
 
+  program_arguments_destroy(args);
+
   if (result != RESULT_OK)
   {
     printf("Операция завершилась с ошибкой!\n");
@@ -73,9 +75,6 @@ int main(int argc, char** argv)
   }
 
   printf("Операция завершена успешно!\n");
-
-  program_arguments_destroy(args);
-
   return EXIT_SUCCESS;
 }
 
