@@ -16,6 +16,7 @@ typedef enum
 } OperationMode;
 
 static OperationMode parse_operation_mode(const char* mode_str);
+static void print_usage();
 
 int main(int argc, char** argv)
 {
@@ -28,6 +29,7 @@ int main(int argc, char** argv)
 
   if (!program_arguments_parse(args, argc, argv))
   {
+    print_usage();
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
@@ -40,6 +42,7 @@ int main(int argc, char** argv)
   if (mode == MODE_UNKNOWN)
   {
     printf("Неизвестный режим работы '%s'!\n", mode_argument);
+    print_usage();
     program_arguments_destroy(args);
     return EXIT_FAILURE;
   }
@@ -89,4 +92,18 @@ static OperationMode parse_operation_mode(const char* mode_str)
   }
 
   return MODE_UNKNOWN;
+}
+
+static void print_usage()
+{
+  printf(
+    "Использование: raw_archive_codec --mode <encode/decode> --input <path> "
+    "--output "
+    "<path>\n");
+  printf("Режимы работы:\n");
+  printf("  encode, e - кодирование файла в архив\n");
+  printf("  decode, d - декодирование архива в файл\n");
+  printf("\nПримеры:\n");
+  printf("  raw_archive_codec encode input.txt output.lolkek \n");
+  printf("  raw_archive_codec decode input.lolkek output.txt\n");
 }

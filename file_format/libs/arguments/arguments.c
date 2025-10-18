@@ -73,10 +73,7 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
       switch (option_index)
       {
         case 0:  // --mode
-          if (self->mode)
-          {
-            free(self->mode);
-          }
+          free(self->mode);
 
           self->mode = (char*)malloc(strlen(optarg) + 1);
           if (self->mode == NULL)
@@ -88,10 +85,7 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
           break;
 
         case 1:  // --input
-          if (self->input)
-          {
-            free(self->input);
-          }
+          free(self->input);
 
           self->input = (char*)malloc(strlen(optarg) + 1);
           if (self->input == NULL)
@@ -103,10 +97,7 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
           break;
 
         case 2:  // --output
-          if (self->output)
-          {
-            free(self->output);
-          }
+          free(self->output);
 
           self->output = (char*)malloc(strlen(optarg) + 1);
           if (self->output == NULL)
@@ -148,25 +139,12 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
     is_arguments_correct = false;
   }
 
-  if (strcmp(self->mode, "encode") != 0 && strcmp(self->mode, "decode") != 0 &&
-      strcmp(self->mode, "e") != 0 && strcmp(self->mode, "d") != 0)
+  if (self->mode != NULL && strcmp(self->mode, "encode") != 0 &&
+      strcmp(self->mode, "decode") != 0 && strcmp(self->mode, "e") != 0 &&
+      strcmp(self->mode, "d") != 0)
   {
     printf("Ошибка: недопустимое значение для --mode: %s\n", self->mode);
     is_arguments_correct = false;
-  }
-
-  if (is_arguments_correct == false)
-  {
-    printf(
-      "Использование: %s --mode <encode/decode> --input <path> --output "
-      "<path>\n",
-      argv[0]);
-    printf("Режимы работы:\n");
-    printf("  encode, e - кодирование файла в архив\n");
-    printf("  decode, d - декодирование архива в файл\n");
-    printf("\nПримеры:\n");
-    printf("  %s encode input.txt output.lolkek \n", argv[0]);
-    printf("  %s decode input.lolkek output.txt\n", argv[0]);
   }
 
   return is_arguments_correct;
