@@ -19,12 +19,19 @@ struct File
 File* file_create(const char* path)
 {
   File* file = (File*)malloc(sizeof(File));
-  if (!file)
+  if (file == NULL)
   {
     return NULL;
   }
 
-  file->path = strdup(path);
+  file->path = (char*)malloc(sizeof(path));
+  if (file->path == NULL)
+  {
+    printf("Произошла ошибка при выделении памяти!\n");
+    return NULL;
+  }
+  strcpy(file->path, path);
+
   file->descriptor = NULL;
   file->buffer = NULL;
   file->size = 0;
