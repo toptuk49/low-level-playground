@@ -6,15 +6,15 @@
 #include "file.h"
 #include "types.h"
 
-#define ARCHIVE_SIGNATURE "LOLKEK"  // 6-байтовая сигнатура
+#define ARCHIVE_SIGNATURE "lolkek"
 #define ARCHIVE_SIGNATURE_SIZE 6
-#define ARCHIVE_VERSION 0  // Версия формата для этого задания
+#define ARCHIVE_VERSION 0
 
 typedef struct
 {
-  char signature[ARCHIVE_SIGNATURE_SIZE];  // 6 байт
-  uint16_t version;                        // 2 байта
-  uint64_t original_size;                  // 8 байт
+  char signature[ARCHIVE_SIGNATURE_SIZE];  // 6 Байт
+  uint16_t version;                        // 2 Байта
+  uint64_t original_size;                  // 8 Байт
 } ArchiveHeader;
 
 #define ARCHIVE_HEADER_SIZE (sizeof(ArchiveHeader))
