@@ -38,34 +38,22 @@ void archive_header_init(ArchiveHeader* header, uint64_t original_size)
   header->original_size = original_size;
 }
 
-Result archive_header_write(const ArchiveHeader* header, FILE* file)
+Result archive_header_write(const ArchiveHeader* header, File* file)
 {
   if (!header || !file)
   {
     return RESULT_INVALID_ARGUMENT;
   }
 
-  size_t write_status = fwrite(header, sizeof(ArchiveHeader), 1, file);
-  if (write_status != 1)
-  {
-    return RESULT_IO_ERROR;
-  }
-
-  return RESULT_OK;
+  return file_write_bytes(file, (const Byte*)header, sizeof(ArchiveHeader));
 }
 
-Result archive_header_read(ArchiveHeader* header, FILE* file)
+Result archive_header_read(ArchiveHeader* header, File* file)
 {
   if (!header || !file)
   {
     return RESULT_INVALID_ARGUMENT;
   }
 
-  size_t read_status = fread(header, sizeof(ArchiveHeader), 1, file);
-  if (read_status != 1)
-  {
-    return RESULT_IO_ERROR;
-  }
-
-  return RESULT_OK;
+  return file_read_bytes_size(file, (Byte*)header, sizeof(ArchiveHeader));
 }

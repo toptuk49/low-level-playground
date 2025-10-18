@@ -131,6 +131,22 @@ Result file_read_bytes(File* self)
   return RESULT_OK;
 }
 
+Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read)
+{
+  if (!self || !self->descriptor || !buffer)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  size_t bytes_read = fread(buffer, 1, size_to_read, self->descriptor);
+  if (bytes_read != size_to_read)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
 Result file_open_for_write(File* self)
 {
   if (!self)

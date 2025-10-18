@@ -13,6 +13,7 @@ void file_destroy(File* self);
 Result file_open_for_read(File* self);
 Result file_close(File* self);
 Result file_read_bytes(File* self);
+Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read);
 
 Result file_open_for_write(File* self);
 Result file_write_bytes(File* self, const Byte* data, Size data_size);

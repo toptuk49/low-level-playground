@@ -2,8 +2,8 @@
 #define ARCHIVE_FORMAT_ARCHIVE_FORMAT_H
 
 #include <stdbool.h>
-#include <stdio.h>
 
+#include "file.h"
 #include "types.h"
 
 #define ARCHIVE_SIGNATURE "LOLKEK"  // 6-байтовая сигнатура
@@ -21,7 +21,7 @@ typedef struct
 
 bool archive_header_is_valid(const ArchiveHeader* header);
 void archive_header_init(ArchiveHeader* header, uint64_t original_size);
-Result archive_header_write(const ArchiveHeader* header, FILE* file);
-Result archive_header_read(ArchiveHeader* header, FILE* file);
+Result archive_header_write(const ArchiveHeader* header, File* file);
+Result archive_header_read(ArchiveHeader* header, File* file);
 
 #endif  // ARCHIVE_FORMAT_ARCHIVE_FORMAT_H
