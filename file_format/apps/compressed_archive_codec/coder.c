@@ -14,13 +14,13 @@ Result compressed_archive_encode(const char* input_path,
     return RESULT_INVALID_ARGUMENT;
   }
 
-  printf("Создание архива: %s -> %s\n", input_path, output_filename);
+  printf("Создание сжатого архива: %s -> %s\n", input_path, output_filename);
 
   CompressedArchiveBuilder* builder =
     compressed_archive_builder_create(output_filename);
   if (builder == NULL)
   {
-    printf("Ошибка: не удалось создать построитель архива\n");
+    printf("Произошла ошибка при создании построителя архива!\n");
     return RESULT_MEMORY_ERROR;
   }
 
@@ -38,7 +38,7 @@ Result compressed_archive_encode(const char* input_path,
 
   if (result != RESULT_OK)
   {
-    printf("Ошибка добавления файлов в архив\n");
+    printf("Произошла ошибка при добавлении файлов в архив!\n");
     compressed_archive_builder_destroy(builder);
     return result;
   }
@@ -48,11 +48,11 @@ Result compressed_archive_encode(const char* input_path,
 
   if (result == RESULT_OK)
   {
-    printf("Архив успешно создан: %s\n", output_filename);
+    printf("Сжатый архив успешно создан: %s\n", output_filename);
   }
   else
   {
-    printf("Ошибка создания архива\n");
+    printf("Произошла ошибка при создании сжатого архива!\n");
   }
 
   return result;

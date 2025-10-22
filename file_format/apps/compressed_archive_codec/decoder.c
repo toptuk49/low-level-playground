@@ -13,13 +13,13 @@ Result compressed_archive_decode(const char* input_filename,
     return RESULT_INVALID_ARGUMENT;
   }
 
-  printf("Извлечение архива: %s -> %s\n", input_filename, output_path);
+  printf("Извлечение сжатого архива: %s -> %s\n", input_filename, output_path);
 
   CompressedArchiveReader* reader =
     compressed_archive_reader_create(input_filename);
   if (reader == NULL)
   {
-    printf("Ошибка: не удалось открыть архив\n");
+    printf("Произошла ошибка при открытии сжатого архива!\n");
     return RESULT_ERROR;
   }
 
@@ -28,11 +28,11 @@ Result compressed_archive_decode(const char* input_filename,
 
   if (result == RESULT_OK)
   {
-    printf("Архив успешно извлечен в: %s\n", output_path);
+    printf("Сжатый архив успешно извлечен в: %s\n", output_path);
   }
   else
   {
-    printf("Ошибка извлечения архива\n");
+    printf("Произошла ошибка при извлечении сжатого архива!\n");
   }
 
   return result;

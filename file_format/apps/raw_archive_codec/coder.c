@@ -2,112 +2,56 @@
 
 #include <stdio.h>
 
-#include "file.h"
-#include "raw_archive_header.h"
+#include "path_utils.h"
+#include "raw_archive_builder.h"
 #include "types.h"
 
-Result raw_archive_encode(const char* input_filename,
-                          const char* output_filename)
+Result raw_archive_encode(const char* input_path, const char* output_filename)
 {
-  if (!input_filename || !output_filename)
+  if (input_path == NULL || output_filename == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
 
-  File* input_file = file_create(input_filename);
-  if (!input_file)
+  printf("Создание несжатого архива: %s -> %s\n", input_path, output_filename);
+
+  RawArchiveBuilder* builder = raw_archive_builder_create(output_filename);
+  if (builder == NULL)
   {
-    printf("Произошла ошибка при создании объекта файла для '%s'!\n",
-           input_filename);
+    printf("Произошла ошибка при создании построителя архива!\n");
     return RESULT_MEMORY_ERROR;
   }
 
-  Result result = file_open_for_read(input_file);
+  Result result;
+  if (path_utils_is_directory(input_path))
+  {
+    printf("Добавление директории: %s\n", input_path);
+    result = raw_archive_builder_add_directory(builder, input_path);
+  }
+  else
+  {
+    printf("Добавление файла: %s\n", input_path);
+    result = raw_archive_builder_add_file(builder, input_path);
+  }
+
   if (result != RESULT_OK)
   {
-    printf("Произошла ошибка при открытии входного файла '%s' для чтения!\n",
-           input_filename);
-    file_destroy(input_file);
+    printf("Произошла ошибка при добавлении файлов в архив!\n");
+    raw_archive_builder_destroy(builder);
     return result;
   }
 
-  result = file_read_bytes(input_file);
-  if (result != RESULT_OK)
+  result = raw_archive_builder_finalize(builder);
+  raw_archive_builder_destroy(builder);
+
+  if (result == RESULT_OK)
   {
-    printf("Произошла ошибка при чтении данных из файла '%s'!\n",
-           input_filename);
-    file_close(input_file);
-    file_destroy(input_file);
-    return result;
+    printf("Несжатый архив успешно создан: %s\n", output_filename);
+  }
+  else
+  {
+    printf("Произошла ошибка при создании несжатого архива!\n");
   }
 
-  Size file_size = file_get_size(input_file);
-  if (file_size == 0)
-  {
-    printf("Входной файл пустой!\n");
-    file_close(input_file);
-    file_destroy(input_file);
-    return RESULT_ERROR;
-  }
-
-  File* output_file = file_create(output_filename);
-  if (!output_file)
-  {
-    printf("Произошла ошибка при создании объекта файла для '%s'!\n",
-           output_filename);
-    file_close(input_file);
-    file_destroy(input_file);
-    return RESULT_MEMORY_ERROR;
-  }
-
-  result = file_open_for_write(output_file);
-  if (result != RESULT_OK)
-  {
-    printf("Произошла ошибка при открытии входного файла '%s' для записи!\n",
-           output_filename);
-    file_close(input_file);
-    file_destroy(input_file);
-    file_destroy(output_file);
-    return result;
-  }
-
-  RawArchiveHeader header;
-  raw_archive_header_init(&header, file_size);
-
-  result = raw_archive_header_write(&header, output_file);
-  if (result != RESULT_OK)
-  {
-    printf("Произошла ошибка при записи заголовка архива!\n");
-    file_close(input_file);
-    file_close(output_file);
-    file_destroy(input_file);
-    file_destroy(output_file);
-    return result;
-  }
-
-  result = file_write_from_file(output_file, input_file);
-  if (result != RESULT_OK)
-  {
-    printf("Произошла ошибка при записи данных в архив!\n");
-    file_close(input_file);
-    file_close(output_file);
-    file_destroy(input_file);
-    file_destroy(output_file);
-    return result;
-  }
-
-  printf("Кодирование завершено успешно!\n");
-  printf("Создан архив: %s\n", output_filename);
-  printf("Исходный размер: %zu Байт\n", file_size);
-  printf("Размер архива: %zu Байт\n", file_size + RAW_ARCHIVE_HEADER_SIZE);
-  printf("Заголовок: %zu Байт\n", RAW_ARCHIVE_HEADER_SIZE);
-  printf("Сигнатура: %.6s\n", RAW_ARCHIVE_SIGNATURE);
-  printf("Версия формата: %u\n", RAW_ARCHIVE_VERSION);
-
-  file_close(input_file);
-  file_close(output_file);
-  file_destroy(input_file);
-  file_destroy(output_file);
-
-  return RESULT_OK;
+  return result;
 }

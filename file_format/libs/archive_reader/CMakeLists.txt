@@ -1,4 +1,4 @@
-add_library(archive_reader SHARED compressed_archive_reader.c)
+add_library(archive_reader SHARED raw_archive_reader.c compressed_archive_reader.c)
 
 target_link_libraries(archive_reader PUBLIC 
     common archive_header file_table path_utils

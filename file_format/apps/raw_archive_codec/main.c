@@ -5,6 +5,7 @@
 #include "arguments.h"
 #include "coder.h"
 #include "decoder.h"
+#include "types.h"
 
 #define DELIMETER "---------------\n"
 
@@ -35,8 +36,8 @@ int main(int argc, char** argv)
   }
 
   const char* mode_argument = program_arguments_get_mode(args);
-  const char* input_file = program_arguments_get_input(args);
-  const char* output_file = program_arguments_get_output(args);
+  const char* input_path = program_arguments_get_input(args);
+  const char* output_path = program_arguments_get_output(args);
 
   OperationMode mode = parse_operation_mode(mode_argument);
   if (mode == MODE_UNKNOWN)
@@ -52,13 +53,13 @@ int main(int argc, char** argv)
   switch (mode)
   {
     case MODE_ENCODE:
-      printf("Кодирование файла в архив\n%s", DELIMETER);
-      result = raw_archive_encode(input_file, output_file);
+      printf("Создание несжатого архива\n%s", DELIMETER);
+      result = raw_archive_encode(input_path, output_path);
       break;
 
     case MODE_DECODE:
-      printf("Декодирование архива в файл\n%s", DELIMETER);
-      result = raw_archive_decode(input_file, output_file);
+      printf("Извлечение из несжатого архива\n%s", DELIMETER);
+      result = raw_archive_decode(input_path, output_path);
       break;
 
     default:
@@ -96,13 +97,19 @@ static OperationMode parse_operation_mode(const char* mode_str)
 static void print_usage()
 {
   printf(
-    "Использование: raw_archive_codec --mode <encode/decode> --input <path> "
-    "--output "
-    "<path>\n");
+    "Использование: raw_archive_codec --mode <encode/decode> --input "
+    "<path> --output <path>\n");
   printf("Режимы работы:\n");
-  printf("  encode, e - кодирование файла в архив\n");
-  printf("  decode, d - декодирование архива в файл\n");
+  printf("  encode, e - создание несжатого архива из файла/папки\n");
+  printf("  decode, d - извлечение файлов из несжатого архива\n");
   printf("\nПримеры:\n");
-  printf("  raw_archive_codec encode input.txt output.lolkek \n");
-  printf("  raw_archive_codec decode input.lolkek output.txt\n");
+  printf(
+    "  raw_archive_codec --mode encode --input document.txt --output "
+    "archive.compressed\n");
+  printf(
+    "  raw_archive_codec --mode encode --input my_folder --output "
+    "folder_archive.compressed\n");
+  printf(
+    "  raw_archive_codec --mode decode --input archive.compressed "
+    "--output extracted_file.txt\n");
 }
