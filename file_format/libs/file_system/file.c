@@ -1,6 +1,5 @@
 #include "file.h"
 
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,7 +117,7 @@ Result file_read_bytes(File* self)
     return RESULT_MEMORY_ERROR;
   }
 
-  size_t bytes_read =
+  Size bytes_read =
     fread(self->buffer, BYTES_AMOUNT, self->size, self->descriptor);
   if (bytes_read != self->size)
   {
@@ -137,7 +136,7 @@ Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read)
     return RESULT_INVALID_ARGUMENT;
   }
 
-  size_t bytes_read = fread(buffer, 1, size_to_read, self->descriptor);
+  Size bytes_read = fread(buffer, 1, size_to_read, self->descriptor);
   if (bytes_read != size_to_read)
   {
     return RESULT_IO_ERROR;
@@ -169,7 +168,7 @@ Result file_write_bytes(File* self, const Byte* data, Size data_size)
     return RESULT_INVALID_ARGUMENT;
   }
 
-  size_t bytes_written = fwrite(data, 1, data_size, self->descriptor);
+  Size bytes_written = fwrite(data, 1, data_size, self->descriptor);
   if (bytes_written != data_size)
   {
     return RESULT_IO_ERROR;
@@ -186,7 +185,7 @@ Result file_write_from_file(File* self, const File* source)
     return RESULT_INVALID_ARGUMENT;
   }
 
-  size_t bytes_written =
+  Size bytes_written =
     fwrite(source->buffer, 1, source->size, self->descriptor);
   if (bytes_written != source->size)
   {
@@ -221,7 +220,7 @@ long file_tell(File* self)
   return ftell(self->descriptor);
 }
 
-Result file_read_at(File* self, Byte* buffer, Size size, uint64_t offset)
+Result file_read_at(File* self, Byte* buffer, Size size, QWord offset)
 {
   if (self == NULL || self->descriptor == NULL || buffer == NULL)
   {
@@ -239,7 +238,7 @@ Result file_read_at(File* self, Byte* buffer, Size size, uint64_t offset)
     return RESULT_IO_ERROR;
   }
 
-  size_t bytes_read = fread(buffer, 1, size, self->descriptor);
+  Size bytes_read = fread(buffer, 1, size, self->descriptor);
 
   if (fseek(self->descriptor, current_pos, SEEK_SET) != 0)
   {

@@ -136,7 +136,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
   }
 
   CompressedArchiveHeader header;
-  uint32_t flags =
+  DWord flags =
     file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
 
   compressed_archive_header_init(
@@ -149,11 +149,11 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     return result;
   }
 
-  uint64_t current_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
-  current_offset += sizeof(uint32_t);  // file_count
+  QWord current_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
+  current_offset += sizeof(DWord);  // file_count
   current_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
 
-  for (uint32_t i = 0; i < file_table_get_count(self->file_table); i++)
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
     entry->offset = current_offset;
@@ -166,7 +166,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     return result;
   }
 
-  for (uint32_t i = 0; i < file_table_get_count(self->file_table); i++)
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     const FileEntry* entry = file_table_get_entry(self->file_table, i);
     result = write_file_data(self->archive_file, entry->filename);

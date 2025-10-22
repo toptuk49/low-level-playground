@@ -1,8 +1,6 @@
 #ifndef FILE_FILE_H
 #define FILE_FILE_H
 
-#include <inttypes.h>
-
 #include "types.h"
 
 typedef struct File File;
@@ -21,7 +19,7 @@ Result file_write_from_file(File* self, const File* source);
 
 Result file_seek(File* self, long offset, int whence);
 long file_tell(File* self);
-Result file_read_at(File* self, Byte* buffer, Size size, uint64_t offset);
+Result file_read_at(File* self, Byte* buffer, Size size, QWord offset);
 
 const Byte* file_get_buffer(const File* self);
 Size file_get_size(const File* self);

@@ -13,14 +13,14 @@
 typedef struct
 {
   char signature[RAW_ARCHIVE_SIGNATURE_SIZE];  // 6 Байт
-  uint16_t version;                            // 2 Байта
-  uint64_t original_size;                      // 8 Байт
+  Word version;                                // 2 Байта
+  QWord original_size;                         // 8 Байт
 } RawArchiveHeader;
 
 #define RAW_ARCHIVE_HEADER_SIZE (sizeof(RawArchiveHeader))
 
 bool raw_archive_header_is_valid(const RawArchiveHeader* header);
-void raw_archive_header_init(RawArchiveHeader* header, uint64_t original_size);
+void raw_archive_header_init(RawArchiveHeader* header, QWord original_size);
 Result raw_archive_header_write(const RawArchiveHeader* header, File* file);
 Result raw_archive_header_read(RawArchiveHeader* header, File* file);
 

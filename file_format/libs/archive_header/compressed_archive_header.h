@@ -2,7 +2,6 @@
 #define ARCHIVE_HEADER_COMPRESSED_ARCHIVE_HEADER_H
 
 #include <stdbool.h>
-#include <stdint.h>
 
 #include "file.h"
 #include "types.h"
@@ -38,34 +37,34 @@ typedef struct
 {
   // Базовый заголовок
   char signature[COMPRESSED_ARCHIVE_SIGNATURE_SIZE];
-  uint16_t version_major;
-  uint16_t version_minor;
-  uint64_t original_size;
+  Word version_major;
+  Word version_minor;
+  QWord original_size;
 
   // Алгоритмы
-  uint8_t primary_compression;
-  uint8_t secondary_compression;
-  uint8_t error_correction;
+  Byte primary_compression;
+  Byte secondary_compression;
+  Byte error_correction;
 
   // Флаги и служебные данные
-  uint32_t flags;
-  uint32_t header_size;      // Полный размер заголовка
-  uint32_t metadata_size;    // Размер метаданных
-  uint32_t compressed_size;  // Размер сжатых данных
+  DWord flags;
+  DWord header_size;      // Полный размер заголовка
+  DWord metadata_size;    // Размер метаданных
+  DWord compressed_size;  // Размер сжатых данных
 
   // Контрольные суммы
-  uint32_t header_crc;
-  uint32_t data_crc;
+  DWord header_crc;
+  DWord data_crc;
 } CompressedArchiveHeader;
 
 #define COMPRESSED_ARCHIVE_HEADER_SIZE (sizeof(CompressedArchiveHeader))
 
 bool compressed_archive_header_is_valid(const CompressedArchiveHeader* header);
 Result compressed_archive_header_init(CompressedArchiveHeader* header,
-                                      uint64_t original_size,
-                                      uint8_t primary_compression,
-                                      uint8_t secondary_compression,
-                                      uint8_t error_correction, uint32_t flags);
+                                      QWord original_size,
+                                      Byte primary_compression,
+                                      Byte secondary_compression,
+                                      Byte error_correction, DWord flags);
 Result compressed_archive_header_write(const CompressedArchiveHeader* header,
                                        File* file);
 Result compressed_archive_header_read(CompressedArchiveHeader* header,

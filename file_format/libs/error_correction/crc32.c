@@ -1,6 +1,5 @@
 #include "crc32.h"
 
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -10,8 +9,8 @@
 
 struct CRC32Table
 {
-  uint32_t cells[ALL_POSSIBLE_BYTES];
-  uint32_t crc32;
+  DWord cells[ALL_POSSIBLE_BYTES];
+  DWord crc32;
 };
 
 CRC32Table* crc32_table_create()
@@ -23,12 +22,12 @@ CRC32Table* crc32_table_create()
     return NULL;
   }
 
-  const uint32_t polynomial = 0xEDB88320;
-  for (uint32_t byte = 0; byte < ALL_POSSIBLE_BYTES; byte++)
+  const DWord polynomial = 0xEDB88320;
+  for (DWord byte = 0; byte < ALL_POSSIBLE_BYTES; byte++)
   {
-    uint32_t current_byte = byte;
-    const size_t bits_in_byte = 8;
-    for (size_t bit = 0; bit < bits_in_byte; bit++)
+    DWord current_byte = byte;
+    const Size bits_in_byte = 8;
+    for (Size bit = 0; bit < bits_in_byte; bit++)
     {
       if (current_byte & 1)
       {
@@ -58,11 +57,11 @@ Result crc32_table_calculate(CRC32Table* self, const Byte* data, Size size)
     return RESULT_INVALID_ARGUMENT;
   }
 
-  const uint32_t initial_value = 0xFFFFFFFF;
-  const uint32_t least_significant_byte = 0xFF;
-  const uint32_t bits_in_byte = 8;
+  const DWord initial_value = 0xFFFFFFFF;
+  const DWord least_significant_byte = 0xFF;
+  const DWord bits_in_byte = 8;
 
-  uint32_t crc = initial_value;
+  DWord crc = initial_value;
 
   for (Size i = 0; i < size; i++)
   {
@@ -75,7 +74,7 @@ Result crc32_table_calculate(CRC32Table* self, const Byte* data, Size size)
   return RESULT_OK;
 }
 
-uint32_t crc32_table_get_crc32(CRC32Table* self)
+DWord crc32_table_get_crc32(CRC32Table* self)
 {
   return self->crc32 ? self->crc32 : 0;
 }

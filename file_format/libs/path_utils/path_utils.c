@@ -1,5 +1,6 @@
 #include "path_utils.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +45,7 @@ char* path_utils_join(const char* dir, const char* file)
     return NULL;
   }
 
-  size_t bytes_written =
+  Size bytes_written =
     snprintf(full_path, PATH_LENGTH_LIMIT, "%s/%s", dir, file);
 
   if (bytes_written != strlen(dir) + strlen(file) + 1)
@@ -65,7 +66,7 @@ char* path_utils_get_parent(const char* path)
     return NULL;
   }
 
-  size_t parent_len = last_slash - path;
+  Size parent_len = last_slash - path;
   char* parent = (char*)malloc(parent_len + 1);
   if (parent == NULL)
   {
@@ -84,7 +85,7 @@ const char* path_utils_get_filename(const char* path)
   return last_slash ? last_slash + 1 : path;
 }
 
-uint64_t path_utils_get_file_size(const char* path)
+QWord path_utils_get_file_size(const char* path)
 {
   struct stat stats;
   if (stat(path, &stats) == 0)
@@ -115,10 +116,9 @@ bool path_utils_is_file_excluded(const char* filename)
 {
   // Пропускаем системные файлы и временные файлы
   const char* excluded_patterns[] = {".DS_Store", "Thumbs.db", "~", ".tmp"};
-  size_t num_patterns =
-    sizeof(excluded_patterns) / sizeof(excluded_patterns[0]);
+  Size num_patterns = sizeof(excluded_patterns) / sizeof(excluded_patterns[0]);
 
-  for (size_t i = 0; i < num_patterns; i++)
+  for (Size i = 0; i < num_patterns; i++)
   {
     if (strstr(filename, excluded_patterns[i]) != NULL)
     {

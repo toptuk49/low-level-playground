@@ -1,6 +1,7 @@
 #include "file_list.h"
 
 #include <dirent.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +15,7 @@ typedef struct
 {
   char* path;
   bool is_directory;
-  uint64_t size;
+  QWord size;
 } FileEntry;
 
 struct FileList
@@ -189,7 +190,7 @@ bool file_list_is_directory(const FileList* self, Size index)
   return self->entries[index].is_directory;
 }
 
-uint64_t file_list_get_size(const FileList* self, Size index)
+QWord file_list_get_size(const FileList* self, Size index)
 {
   if (!self || index >= self->count)
   {

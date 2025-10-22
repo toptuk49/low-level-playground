@@ -29,10 +29,10 @@ bool compressed_archive_header_is_valid(const CompressedArchiveHeader* header)
 }
 
 Result compressed_archive_header_init(CompressedArchiveHeader* header,
-                                      uint64_t original_size,
-                                      uint8_t primary_compression,
-                                      uint8_t secondary_compression,
-                                      uint8_t error_correction, uint32_t flags)
+                                      QWord original_size,
+                                      Byte primary_compression,
+                                      Byte secondary_compression,
+                                      Byte error_correction, DWord flags)
 {
   if (header == NULL)
   {

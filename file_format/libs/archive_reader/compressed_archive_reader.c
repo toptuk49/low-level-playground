@@ -98,7 +98,7 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
 }
 
 static Result extract_single_file(CompressedArchiveReader* self,
-                                  uint32_t file_index, const char* output_path)
+                                  DWord file_index, const char* output_path)
 {
   const FileEntry* entry = file_table_get_entry(self->file_table, file_index);
   if (entry == NULL)
@@ -159,16 +159,15 @@ Result compressed_archive_reader_extract_all(CompressedArchiveReader* self,
     }
   }
 
-  for (uint32_t i = 0; i < file_table_get_count(self->file_table); i++)
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     const FileEntry* entry = file_table_get_entry(self->file_table, i);
 
     char output_file_path[PATH_LIMIT];
     if (self->header.flags & FLAG_DIRECTORY)
     {
-      size_t bytes_written =
-        snprintf(output_file_path, sizeof(output_file_path), "%s/%s",
-                 output_path, entry->filename);
+      Size bytes_written = snprintf(output_file_path, sizeof(output_file_path),
+                                    "%s/%s", output_path, entry->filename);
 
       char* parent = path_utils_get_parent(output_file_path);
       if (parent != NULL)
@@ -195,14 +194,14 @@ Result compressed_archive_reader_extract_all(CompressedArchiveReader* self,
   return RESULT_OK;
 }
 
-uint32_t compressed_archive_reader_get_file_count(
+DWord compressed_archive_reader_get_file_count(
   const CompressedArchiveReader* self)
 {
   return self ? file_table_get_count(self->file_table) : 0;
 }
 
 const char* compressed_archive_reader_get_filename(
-  const CompressedArchiveReader* self, uint32_t index)
+  const CompressedArchiveReader* self, DWord index)
 {
   if (self == NULL)
   {

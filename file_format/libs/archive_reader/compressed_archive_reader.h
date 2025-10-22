@@ -12,12 +12,12 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self);
 Result compressed_archive_reader_extract_all(CompressedArchiveReader* self,
                                              const char* output_path);
 Result compressed_archive_reader_extract_file(CompressedArchiveReader* self,
-                                              uint32_t file_index,
+                                              DWord file_index,
                                               const char* output_path);
 
-uint32_t compressed_archive_reader_get_file_count(
+DWord compressed_archive_reader_get_file_count(
   const CompressedArchiveReader* self);
 const char* compressed_archive_reader_get_filename(
-  const CompressedArchiveReader* self, uint32_t index);
+  const CompressedArchiveReader* self, DWord index);
 
 #endif  // ARCHIVE_READER_COMPRESSED_ARCHIVE_READER_H

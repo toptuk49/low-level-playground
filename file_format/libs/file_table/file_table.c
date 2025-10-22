@@ -13,10 +13,10 @@
 struct FileTable
 {
   FileEntry* entries;
-  uint32_t count;
-  uint32_t capacity;
-  uint64_t total_original_size;
-  uint64_t total_compressed_size;
+  DWord count;
+  DWord capacity;
+  QWord total_original_size;
+  QWord total_compressed_size;
 };
 
 FileTable* file_table_create(void)
@@ -54,7 +54,7 @@ void file_table_destroy(FileTable* self)
   free(self);
 }
 
-static Result file_table_resize(FileTable* self, uint32_t new_capacity)
+static Result file_table_resize(FileTable* self, DWord new_capacity)
 {
   FileEntry* new_entries =
     (FileEntry*)realloc(self->entries, sizeof(FileEntry) * new_capacity);
@@ -69,7 +69,7 @@ static Result file_table_resize(FileTable* self, uint32_t new_capacity)
   return RESULT_OK;
 }
 
-Result file_table_add_file(FileTable* self, const char* filename, uint64_t size)
+Result file_table_add_file(FileTable* self, const char* filename, QWord size)
 {
   if (self == NULL || filename == NULL)
   {
@@ -154,12 +154,12 @@ Result file_table_add_directory(FileTable* self, const char* dirname)
   return file_table_add_directory_recursive(self, dirname);
 }
 
-uint32_t file_table_get_count(const FileTable* self)
+DWord file_table_get_count(const FileTable* self)
 {
   return self ? self->count : 0;
 }
 
-const FileEntry* file_table_get_entry(const FileTable* self, uint32_t index)
+const FileEntry* file_table_get_entry(const FileTable* self, DWord index)
 {
   if (self == NULL || index >= self->count)
   {
@@ -169,7 +169,7 @@ const FileEntry* file_table_get_entry(const FileTable* self, uint32_t index)
   return &self->entries[index];
 }
 
-uint64_t file_table_get_total_size(const FileTable* self)
+QWord file_table_get_total_size(const FileTable* self)
 {
   return self ? self->total_original_size : 0;
 }
@@ -188,7 +188,7 @@ Result file_table_write(const FileTable* self, File* file)
     return result;
   }
 
-  for (uint32_t i = 0; i < self->count; i++)
+  for (DWord i = 0; i < self->count; i++)
   {
     result =
       file_write_bytes(file, (const Byte*)&self->entries[i], sizeof(FileEntry));
@@ -222,7 +222,7 @@ Result file_table_read(FileTable* self, File* file)
     return RESULT_MEMORY_ERROR;
   }
 
-  for (uint32_t i = 0; i < self->count; i++)
+  for (DWord i = 0; i < self->count; i++)
   {
     result =
       file_read_bytes_size(file, (Byte*)&self->entries[i], sizeof(FileEntry));

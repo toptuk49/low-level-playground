@@ -27,7 +27,7 @@ bool raw_archive_header_is_valid(const RawArchiveHeader* header)
   return true;
 }
 
-void raw_archive_header_init(RawArchiveHeader* header, uint64_t original_size)
+void raw_archive_header_init(RawArchiveHeader* header, QWord original_size)
 {
   if (!header)
   {
