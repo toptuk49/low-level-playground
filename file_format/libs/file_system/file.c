@@ -1,5 +1,6 @@
 #include "file.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,10 +25,11 @@ File* file_create(const char* path)
     return NULL;
   }
 
-  file->path = (char*)malloc(sizeof(path));
+  file->path = (char*)malloc(strlen(path) + 1);
   if (file->path == NULL)
   {
     printf("Произошла ошибка при выделении памяти!\n");
+    free(file);
     return NULL;
   }
   strcpy(file->path, path);
@@ -41,7 +43,7 @@ File* file_create(const char* path)
 
 void file_destroy(File* self)
 {
-  if (!self)
+  if (self == NULL)
   {
     return;
   }
@@ -49,11 +51,8 @@ void file_destroy(File* self)
   if (self->descriptor)
   {
     int close_status = fclose(self->descriptor);
-    if (close_status != 0)
-    {
-      printf("Произошла ошибка при закрытии файла!\n");
-    }
   }
+
   free(self->buffer);
   free(self->path);
   free(self);
@@ -61,13 +60,13 @@ void file_destroy(File* self)
 
 Result file_open_for_read(File* self)
 {
-  if (!self)
+  if (self == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
 
   self->descriptor = fopen(self->path, "rb");
-  if (!self->descriptor)
+  if (self->descriptor == NULL)
   {
     return RESULT_IO_ERROR;
   }
@@ -77,7 +76,7 @@ Result file_open_for_read(File* self)
 
 Result file_close(File* self)
 {
-  if (!self || !self->descriptor)
+  if (self == NULL || self->descriptor == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
@@ -94,7 +93,7 @@ Result file_close(File* self)
 
 Result file_read_bytes(File* self)
 {
-  if (!self || !self->descriptor)
+  if (self == NULL || self->descriptor == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
@@ -133,7 +132,7 @@ Result file_read_bytes(File* self)
 
 Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read)
 {
-  if (!self || !self->descriptor || !buffer)
+  if (self == NULL || self->descriptor == NULL || buffer == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
@@ -149,13 +148,13 @@ Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read)
 
 Result file_open_for_write(File* self)
 {
-  if (!self)
+  if (self == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
 
   self->descriptor = fopen(self->path, "wb");
-  if (!self->descriptor)
+  if (self->descriptor == NULL)
   {
     return RESULT_IO_ERROR;
   }
@@ -165,7 +164,7 @@ Result file_open_for_write(File* self)
 
 Result file_write_bytes(File* self, const Byte* data, Size data_size)
 {
-  if (!self || !self->descriptor || !data)
+  if (self == NULL || self->descriptor == NULL || data == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
@@ -181,7 +180,8 @@ Result file_write_bytes(File* self, const Byte* data, Size data_size)
 
 Result file_write_from_file(File* self, const File* source)
 {
-  if (!self || !self->descriptor || !source || !source->buffer)
+  if (self == NULL || self->descriptor == NULL || source == NULL ||
+      source->buffer == NULL)
   {
     return RESULT_INVALID_ARGUMENT;
   }
@@ -189,6 +189,64 @@ Result file_write_from_file(File* self, const File* source)
   size_t bytes_written =
     fwrite(source->buffer, 1, source->size, self->descriptor);
   if (bytes_written != source->size)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+Result file_seek(File* self, long offset, int whence)
+{
+  if (self == NULL || self->descriptor == NULL)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  if (fseek(self->descriptor, offset, whence) != 0)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  return RESULT_OK;
+}
+
+long file_tell(File* self)
+{
+  if (self == NULL || self->descriptor == NULL)
+  {
+    return -1;
+  }
+
+  return ftell(self->descriptor);
+}
+
+Result file_read_at(File* self, Byte* buffer, Size size, uint64_t offset)
+{
+  if (self == NULL || self->descriptor == NULL || buffer == NULL)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  long current_pos = ftell(self->descriptor);
+  if (current_pos == -1)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  if (fseek(self->descriptor, (long)offset, SEEK_SET) != 0)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  size_t bytes_read = fread(buffer, 1, size, self->descriptor);
+
+  if (fseek(self->descriptor, current_pos, SEEK_SET) != 0)
+  {
+    return RESULT_IO_ERROR;
+  }
+
+  if (bytes_read != size)
   {
     return RESULT_IO_ERROR;
   }

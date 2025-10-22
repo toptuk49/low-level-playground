@@ -1,7 +1,7 @@
 #ifndef FILE_FILE_H
 #define FILE_FILE_H
 
-#include <stdio.h>
+#include <inttypes.h>
 
 #include "types.h"
 
@@ -18,6 +18,10 @@ Result file_read_bytes_size(File* self, Byte* buffer, Size size_to_read);
 Result file_open_for_write(File* self);
 Result file_write_bytes(File* self, const Byte* data, Size data_size);
 Result file_write_from_file(File* self, const File* source);
+
+Result file_seek(File* self, long offset, int whence);
+long file_tell(File* self);
+Result file_read_at(File* self, Byte* buffer, Size size, uint64_t offset);
 
 const Byte* file_get_buffer(const File* self);
 Size file_get_size(const File* self);
