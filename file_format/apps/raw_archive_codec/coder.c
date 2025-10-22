@@ -1,10 +1,9 @@
 #include "coder.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 
-#include "archive_format.h"
 #include "file.h"
+#include "raw_archive_header.h"
 #include "types.h"
 
 Result raw_archive_encode(const char* input_filename,
@@ -72,10 +71,10 @@ Result raw_archive_encode(const char* input_filename,
     return result;
   }
 
-  ArchiveHeader header;
-  archive_header_init(&header, file_size);
+  RawArchiveHeader header;
+  raw_archive_header_init(&header, file_size);
 
-  result = archive_header_write(&header, output_file);
+  result = raw_archive_header_write(&header, output_file);
   if (result != RESULT_OK)
   {
     printf("Произошла ошибка при записи заголовка архива!\n");
@@ -100,10 +99,10 @@ Result raw_archive_encode(const char* input_filename,
   printf("Кодирование завершено успешно!\n");
   printf("Создан архив: %s\n", output_filename);
   printf("Исходный размер: %zu Байт\n", file_size);
-  printf("Размер архива: %zu Байт\n", file_size + ARCHIVE_HEADER_SIZE);
-  printf("Заголовок: %zu Байт\n", ARCHIVE_HEADER_SIZE);
-  printf("Сигнатура: %.6s\n", ARCHIVE_SIGNATURE);
-  printf("Версия формата: %u\n", ARCHIVE_VERSION);
+  printf("Размер архива: %zu Байт\n", file_size + RAW_ARCHIVE_HEADER_SIZE);
+  printf("Заголовок: %zu Байт\n", RAW_ARCHIVE_HEADER_SIZE);
+  printf("Сигнатура: %.6s\n", RAW_ARCHIVE_SIGNATURE);
+  printf("Версия формата: %u\n", RAW_ARCHIVE_VERSION);
 
   file_close(input_file);
   file_close(output_file);

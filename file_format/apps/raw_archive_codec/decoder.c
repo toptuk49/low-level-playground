@@ -2,11 +2,10 @@
 
 #include <inttypes.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "archive_format.h"
 #include "file.h"
+#include "raw_archive_header.h"
 #include "types.h"
 
 Result raw_archive_decode(const char* input_filename,
@@ -45,7 +44,7 @@ Result raw_archive_decode(const char* input_filename,
   }
 
   Size archive_size = file_get_size(archive_file);
-  if (archive_size < ARCHIVE_HEADER_SIZE)
+  if (archive_size < RAW_ARCHIVE_HEADER_SIZE)
   {
     printf("Архив слишком мал для содержания заголовка!\n");
     file_close(archive_file);
@@ -54,10 +53,10 @@ Result raw_archive_decode(const char* input_filename,
   }
 
   const Byte* archive_data = file_get_buffer(archive_file);
-  ArchiveHeader header;
-  memcpy(&header, archive_data, ARCHIVE_HEADER_SIZE);
+  RawArchiveHeader header;
+  memcpy(&header, archive_data, RAW_ARCHIVE_HEADER_SIZE);
 
-  if (!archive_header_is_valid(&header))
+  if (!raw_archive_header_is_valid(&header))
   {
     printf("Неверная сигнатура или версия архива!\n");
     file_close(archive_file);
@@ -65,7 +64,7 @@ Result raw_archive_decode(const char* input_filename,
     return RESULT_ERROR;
   }
 
-  if (archive_size != ARCHIVE_HEADER_SIZE + header.original_size)
+  if (archive_size != RAW_ARCHIVE_HEADER_SIZE + header.original_size)
   {
     printf("Размер архива и данных в нем несоответствуют!\n");
     file_close(archive_file);
@@ -98,7 +97,7 @@ Result raw_archive_decode(const char* input_filename,
     return result;
   }
 
-  const Byte* file_data = archive_data + ARCHIVE_HEADER_SIZE;
+  const Byte* file_data = archive_data + RAW_ARCHIVE_HEADER_SIZE;
   result = file_write_bytes(output_file, file_data, header.original_size);
   if (result != RESULT_OK)
   {
