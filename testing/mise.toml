@@ -1,0 +1,57 @@
+min_version = "2024.9.5"
+
+[env]
+PROJECT_NAME = "{{ config_root | basename }}"
+BUILD_DIR = "{{ config_root }}/build"
+CONAN_BUILD_DIR = "{{ config_root }}/build/Release"
+CONAN_TOOLCHAIN = "{{ config_root }}/build/build/Release/generators/conan_toolchain.cmake"
+
+[tools]
+cmake = "latest"
+make = "latest"
+conan = "latest"
+
+[tasks.install]
+description = "Install Conan dependencies"
+run = "conan install . --output-folder=$BUILD_DIR --build=missing"
+
+[tasks.configure]
+description = "Configure the project"
+run = "mkdir -p $BUILD_DIR && cd $BUILD_DIR && cmake .. -DCMAKE_TOOLCHAIN_FILE=$CONAN_TOOLCHAIN -DCMAKE_BUILD_TYPE=Release"
+
+[tasks.build]
+description = "Build the project"
+run = "cd $BUILD_DIR && make"
+
+[tasks.clean]
+description = "Clean the build directory"
+run = "rm -rf $BUILD_DIR"
+
+[tasks.run]
+description = "Run the application"
+run = "$BUILD_DIR/bin/$PROJECT_NAME"
+
+[tasks.run-tests]
+description = "Run tests"
+run = "$BUILD_DIR/tests/tests"
+
+[tasks.full-build]
+description = "Full build from scratch (Conan install + Configure + Build)"
+run = ["mise run install", "mise run configure", "mise run build"]
+
+[tasks.dev]
+description = "Development workflow: clean, install dependencies, configure and build"
+run = [
+  "mise run clean",
+  "mise run install",
+  "mise run configure",
+  "mise run build",
+]
+
+[tasks.info]
+description = "Print project information"
+run = '''
+echo "Project: $PROJECT_NAME"
+echo "Build Directory: $BUILD_DIR"
+echo "Conan Toolchain: $CONAN_TOOLCHAIN"
+'''
