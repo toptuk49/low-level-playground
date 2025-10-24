@@ -126,7 +126,13 @@ static Result file_table_add_directory_recursive(FileTable* self,
 
     if (entry->d_type == DT_DIR)
     {
-      file_table_add_directory_recursive(self, full_path);
+      Result result = file_table_add_directory_recursive(self, full_path);
+      if (result != RESULT_OK)
+      {
+        free(full_path);
+        closedir(dir);
+        return result;
+      }
     }
     else
     {

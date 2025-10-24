@@ -29,10 +29,70 @@ Result path_utils_create_directory(const char* path)
   const int chown = 0755;
   if (mkdir(path, chown) != 0)
   {
-    printf("Произошла ошибка при создании папки!");
+    printf("Произошла ошибка при создании папки!\n");
     return RESULT_IO_ERROR;
   }
 
+  return RESULT_OK;
+}
+
+Result path_utils_create_directory_recursive(const char* path)
+{
+  if (path == NULL || strlen(path) == 0)
+  {
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  if (path_utils_exists(path))
+  {
+    return RESULT_OK;
+  }
+
+  char* path_copy = (char*)malloc(strlen(path) + 1);
+  if (path_copy == NULL)
+  {
+    printf("Произошла ошибка при выделении памяти!\n");
+    return RESULT_MEMORY_ERROR;
+  }
+  strcpy(path_copy, path);
+
+  char* current_pos = path_copy;
+  while (*current_pos != '\0')
+  {
+    if (*current_pos == '/')
+    {
+      current_pos++;
+      continue;
+    }
+
+    char* next_slash = strchr(current_pos, '/');
+    if (next_slash != NULL)
+    {
+      *next_slash = '\0';
+    }
+
+    if (!path_utils_exists(path_copy))
+    {
+      Result result = path_utils_create_directory(path_copy);
+      if (result != RESULT_OK)
+      {
+        free(path_copy);
+        return result;
+      }
+    }
+
+    if (next_slash != NULL)
+    {
+      *next_slash = '/';
+      current_pos = next_slash + 1;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  free(path_copy);
   return RESULT_OK;
 }
 

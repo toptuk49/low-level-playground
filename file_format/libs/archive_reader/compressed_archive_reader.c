@@ -190,10 +190,17 @@ Result compressed_archive_reader_extract_all(CompressedArchiveReader* self,
       {
         if (!path_utils_exists(parent))
         {
-          path_utils_create_directory(parent);
+          Result result = path_utils_create_directory_recursive(parent);
+          if (result != RESULT_OK)
+          {
+            free(parent);
+            return result;
+          }
         }
         free(parent);
       }
+
+      printf("Извлечение файла: %s -> %s\n", entry->filename, output_file_path);
     }
     else
     {
@@ -203,6 +210,7 @@ Result compressed_archive_reader_extract_all(CompressedArchiveReader* self,
     Result result = extract_single_file(self, i, output_file_path);
     if (result != RESULT_OK)
     {
+      printf("Ошибка извлечения файла: %s\n", output_file_path);
       return result;
     }
   }

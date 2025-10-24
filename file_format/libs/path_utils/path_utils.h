@@ -8,6 +8,7 @@
 bool path_utils_is_directory(const char* path);
 bool path_utils_exists(const char* path);
 Result path_utils_create_directory(const char* path);
+Result path_utils_create_directory_recursive(const char* path);
 char* path_utils_join(const char* dir, const char* file);
 char* path_utils_get_parent(const char* path);
 const char* path_utils_get_filename(const char* path);
