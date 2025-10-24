@@ -97,7 +97,7 @@ Result file_list_add_file(FileList* self, const char* filename)
 
   FileEntry* entry = &self->entries[self->count];
 
-  entry->path = (char*)malloc(strlen(filename));
+  entry->path = (char*)malloc(strlen(filename) + 1);
   if (entry->path == NULL)
   {
     printf("Произошла ошибка при выделении памяти!\n");

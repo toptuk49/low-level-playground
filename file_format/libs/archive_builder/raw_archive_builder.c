@@ -150,7 +150,7 @@ Result raw_archive_builder_finalize(RawArchiveBuilder* self)
     return result;
   }
 
-  for (uint32_t i = 0; i < file_table_get_count(self->file_table); i++)
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     const FileEntry* entry = file_table_get_entry(self->file_table, i);
     result = write_file_data(self->archive_file, entry->filename);

@@ -149,15 +149,15 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     return result;
   }
 
-  QWord current_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
-  current_offset += sizeof(DWord);  // file_count
-  current_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
+  QWord data_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
+  data_offset += sizeof(DWord);  // file_count
+  data_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
 
   for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
-    entry->offset = current_offset;
-    current_offset += entry->original_size;
+    entry->offset = data_offset;
+    data_offset += entry->original_size;
   }
 
   result = file_table_write(self->file_table, self->archive_file);

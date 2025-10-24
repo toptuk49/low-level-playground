@@ -100,7 +100,7 @@ void raw_archive_reader_destroy(RawArchiveReader* self)
   free(self);
 }
 
-static Result extract_single_file(RawArchiveReader* self, uint32_t file_index,
+static Result extract_single_file(RawArchiveReader* self, DWord file_index,
                                   const char* output_path)
 {
   const FileEntry* entry = file_table_get_entry(self->file_table, file_index);
@@ -119,12 +119,13 @@ static Result extract_single_file(RawArchiveReader* self, uint32_t file_index,
 
   // Читаем данные файла из архива
   Size data_offset =
-    RAW_ARCHIVE_HEADER_SIZE + sizeof(uint32_t) +
+    RAW_ARCHIVE_HEADER_SIZE + sizeof(DWord) +
     (file_table_get_count(self->file_table) * sizeof(FileEntry)) +
     entry->offset;
 
   Result result = file_read_at(self->archive_file, file_data,
-                               entry->original_size, data_offset);
+                               entry->original_size, entry->offset);
+
   if (result != RESULT_OK)
   {
     free(file_data);
@@ -170,7 +171,7 @@ Result raw_archive_reader_extract_all(RawArchiveReader* self,
     }
   }
 
-  for (uint32_t i = 0; i < file_table_get_count(self->file_table); i++)
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
   {
     const FileEntry* entry = file_table_get_entry(self->file_table, i);
 
@@ -205,13 +206,13 @@ Result raw_archive_reader_extract_all(RawArchiveReader* self,
   return RESULT_OK;
 }
 
-uint32_t raw_archive_reader_get_file_count(const RawArchiveReader* self)
+DWord raw_archive_reader_get_file_count(const RawArchiveReader* self)
 {
   return self ? file_table_get_count(self->file_table) : 0;
 }
 
 const char* raw_archive_reader_get_filename(const RawArchiveReader* self,
-                                            uint32_t index)
+                                            DWord index)
 {
   if (self == NULL)
   {

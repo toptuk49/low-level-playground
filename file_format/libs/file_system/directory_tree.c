@@ -57,7 +57,7 @@ Result directory_tree_build_from_path(DirectoryTree* self,
 
   free(self->root_path);
 
-  self->root_path = (char*)malloc(strlen(root_path));
+  self->root_path = (char*)malloc(strlen(root_path) + 1);
   if (self->root_path == NULL)
   {
     printf("Произошла ошибка при выделении памяти!\n");
