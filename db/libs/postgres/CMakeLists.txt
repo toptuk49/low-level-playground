@@ -6,6 +6,7 @@ else()
     find_path(PostgreSQL_INCLUDE_DIR
         NAMES libpq-fe.h
         PATHS /home/linuxbrew/.linuxbrew/opt/libpq/include
+              /opt/homebrew/opt/libpq/include
               /usr/local/opt/libpq/include
               /usr/include/postgresql
         NO_DEFAULT_PATH
@@ -14,6 +15,7 @@ else()
     find_library(PostgreSQL_LIBRARY
         NAMES pq libpq
         PATHS /home/linuxbrew/.linuxbrew/opt/libpq/lib
+              /opt/homebrew/opt/libpq/lib
               /usr/local/opt/libpq/lib
               /usr/lib/x86_64-linux-gnu
         NO_DEFAULT_PATH

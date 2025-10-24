@@ -2,9 +2,11 @@
 
 A practical exploration of C and PostgreSQL integration for system programming education.
 
-## 🚀 Quick Start (Linux/WSL)
+## 🚀 Quick Start
 
 ### Prerequisites
+
+On Linux/WSL:
 
 ```sh
 sudo apt update
@@ -12,8 +14,32 @@ sudo apt update
 # Install PostgreSQL
 sudo apt install postgresql postgresql-client
 
+# Install libpq
+sudo apt install libpq-dev
+
 # Install CMake
 sudo apt install cmake
+
+# Verify installation
+psql --version
+cmake --version
+```
+
+On macOS:
+
+```sh
+# Install PostgreSQL
+brew install postgresql
+brew link --force postgresql
+
+# Start PostgreSQL service
+brew services start postgresql
+
+# Install libpq
+brew install libpq
+
+# Install CMake
+brew install cmake
 
 # Verify installation
 psql --version
