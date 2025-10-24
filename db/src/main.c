@@ -5,7 +5,7 @@
 
 int main()
 {
-  printf("Starting PostgreSQL connection...\n");
+  printf("Устанавливаем соединение с PostgreSQL...\n");
 
   char* connectionParameters =
     "host=localhost "
@@ -16,22 +16,22 @@ int main()
 
   Connection* connection = connection_create(connectionParameters);
 
-  printf("Connection attempt completed.\n");
   print_connection_status(connection);
 
   if (get_connection_status(connection) == CONNECTION_STATUS_BAD)
   {
-    int print_result = fprintf(stderr, "Connecton to database failed: %s\n",
-                               get_error_message(connection));
+    int print_result =
+      printf("Не удалось установить соединение с базой данных: %s\n",
+             get_error_message(connection));
     exit_with_error(connection);
   }
 
-  printf("Connected successfully! Testing query...\n");
+  printf("Соединение с БД успешно установлено! Выполняем тестовый запрос...\n");
 
   print_query(connection, "SELECT version()");
   print_query(connection, "SELECT * FROM students LIMIT 5;");
 
-  printf("All operations complete!");
+  printf("Все операции завершены успешно!");
   finish_connection(connection);
 
   return 0;

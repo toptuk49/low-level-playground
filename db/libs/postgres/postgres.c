@@ -3,12 +3,13 @@
 #include <libpq-fe.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "types.h"
 
 struct Connection
 {
-  PGconn *connection;
+  PGconn* connection;
 };
 
 static ConnectionStatus pq_status_to_connection_status(ConnStatusType pq_status)
@@ -24,7 +25,7 @@ static ConnectionStatus pq_status_to_connection_status(ConnStatusType pq_status)
   }
 }
 
-static const char *pq_status_to_string(ConnStatusType pq_status)
+static const char* pq_status_to_string(ConnStatusType pq_status)
 {
   switch (pq_status)
   {
@@ -51,12 +52,12 @@ static const char *pq_status_to_string(ConnStatusType pq_status)
   }
 }
 
-Connection *connection_create(char *parameters)
+Connection* connection_create(char* parameters)
 {
-  Connection *connection = (Connection *)malloc(sizeof(Connection));
+  Connection* connection = (Connection*)malloc(sizeof(Connection));
   if (connection == NULL)
   {
-    printf("Error creating Connection object!");
+    printf("Произошла ошибка при выделении памяти!\n");
     return NULL;
   }
 
@@ -64,54 +65,27 @@ Connection *connection_create(char *parameters)
   return connection;
 }
 
-void print_connection_status(Connection *connection)
+void print_connection_status(Connection* connection)
 {
   ConnStatusType pq_status = PQstatus(connection->connection);
   ConnectionStatus our_status = pq_status_to_connection_status(pq_status);
 
-  printf("Connection status: %s (our: %s)\n", pq_status_to_string(pq_status),
+  printf("Статус подключения: %s (наш: %s)\n", pq_status_to_string(pq_status),
          get_connection_status_string(our_status));
 
-  printf("Database: %s\n", PQdb(connection->connection));
-  printf("User: %s\n", PQuser(connection->connection));
-  printf("Host: %s\n", PQhost(connection->connection));
-  printf("Port: %s\n", PQport(connection->connection));
+  printf("База данных: %s\n", PQdb(connection->connection));
+  printf("Пользователь: %s\n", PQuser(connection->connection));
+  printf("Хост: %s\n", PQhost(connection->connection));
+  printf("Порт: %s\n", PQport(connection->connection));
 }
 
-void print_query(Connection *connection, char *query)
-{
-  PGresult *result = PQexec(connection->connection, query);
-
-  if (PQresultStatus(result) != PGRES_TUPLES_OK)
-  {
-    printf("No data retrieved! Error: %s\n",
-           PQerrorMessage(connection->connection));
-    PQclear(result);
-    exit_with_error(connection);
-  }
-
-  int rows = PQntuples(result);
-  int columns = PQnfields(result);
-
-  for (int i = 0; i < rows; i++)
-  {
-    for (int j = 0; j < columns; j++)
-    {
-      printf("%s ", PQgetvalue(result, i, j));
-    }
-    printf("\n");
-  }
-
-  PQclear(result);
-}
-
-ConnectionStatus get_connection_status(Connection *connection)
+ConnectionStatus get_connection_status(Connection* connection)
 {
   ConnStatusType pq_status = PQstatus(connection->connection);
   return pq_status_to_connection_status(pq_status);
 }
 
-const char *get_connection_status_string(ConnectionStatus status)
+const char* get_connection_status_string(ConnectionStatus status)
 {
   switch (status)
   {
@@ -126,18 +100,18 @@ const char *get_connection_status_string(ConnectionStatus status)
   }
 }
 
-char *get_error_message(Connection *connection)
+char* get_error_message(Connection* connection)
 {
   return PQerrorMessage(connection->connection);
 }
 
-void exit_with_error(Connection *connection)
+void exit_with_error(Connection* connection)
 {
   finish_connection(connection);
   exit(1);
 }
 
-void finish_connection(Connection *connection)
+void finish_connection(Connection* connection)
 {
   if (connection && connection->connection)
   {
@@ -146,4 +120,160 @@ void finish_connection(Connection *connection)
   }
 
   free(connection);
+}
+
+// Unsafe request
+void print_query(Connection* connection, char* query)
+{
+  PGresult* result = PQexec(connection->connection, query);
+
+  if (PQresultStatus(result) != PGRES_TUPLES_OK)
+  {
+    printf("Данные из опасного запроса не были получены! Ошибка: %s\n",
+           PQerrorMessage(connection->connection));
+    PQclear(result);
+    return;
+  }
+
+  int rows = PQntuples(result);
+  int columns = PQnfields(result);
+
+  for (int i = 0; i < rows; i++)
+  {
+    for (int j = 0; j < columns; j++)
+    {
+      printf("%s ", PQgetvalue(result, i, j));
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  PQclear(result);
+}
+
+// Safe request
+QueryParams* create_query_params(int count)
+{
+  QueryParams* params = (QueryParams*)malloc(sizeof(QueryParams));
+  params->count = count;
+  params->values = (const char**)malloc(count * sizeof(char*));
+  params->lengths = (int*)malloc(count * sizeof(int));
+  params->formats = (int*)malloc(count * sizeof(int));
+  if (params->values == NULL || params->lengths == NULL ||
+      params->formats == NULL)
+  {
+    printf("Произошла ошибка при выделении памяти!\n");
+    return NULL;
+  }
+
+  // По умолчанию все параметры в текстовом формате
+  for (int i = 0; i < count; i++)
+  {
+    params->values[i] = NULL;
+    params->lengths[i] = 0;
+    params->formats[i] = 0;  // 0 = text, 1 = binary
+  }
+
+  return params;
+}
+
+void add_string_param(QueryParams* params, int index, const char* value)
+{
+  if (index < params->count)
+  {
+    params->values[index] = strdup(value);
+    params->lengths[index] = (int)strlen(value);
+    params->formats[index] = 0;  // Text format
+  }
+}
+
+void add_int_param(QueryParams* params, int index, int value)
+{
+  if (index < params->count)
+  {
+    // Convert int to string
+    const int BUFFER_SIZE = 20;
+    char buffer[BUFFER_SIZE];
+    snprintf(buffer, sizeof(buffer), "%d", value);
+    params->values[index] = strdup(buffer);
+    params->lengths[index] = (int)strlen(buffer);
+    params->formats[index] = 0;  // Text format
+  }
+}
+
+void free_query_params(QueryParams* params)
+{
+  if (params)
+  {
+    for (int i = 0; i < params->count; i++)
+    {
+      if (params->values[i])
+      {
+        free((void*)params->values[i]);
+      }
+    }
+    free((char*)params->values);
+    free(params->lengths);
+    free(params->formats);
+    free(params);
+  }
+}
+
+// Safe request
+void print_query_params(Connection* connection, char* query,
+                        QueryParams* params)
+{
+  PGresult* result =
+    PQexecParams(connection->connection, query, params->count,
+                 NULL,  // OID типов (автоопределение)
+                 params->values, params->lengths, params->formats,
+                 0);  // результат в текстовом формате
+
+  if (PQresultStatus(result) != PGRES_TUPLES_OK)
+  {
+    printf("Данные из безопасного запроса не были получены! Error: %s\n",
+           PQerrorMessage(connection->connection));
+    PQclear(result);
+    return;
+  }
+
+  int rows = PQntuples(result);
+  int columns = PQnfields(result);
+
+  printf("Найдено записей: %d\n", rows);
+  for (int i = 0; i < rows; i++)
+  {
+    for (int j = 0; j < columns; j++)
+    {
+      printf("%s ", PQgetvalue(result, i, j));
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  PQclear(result);
+}
+
+int execute_update_params(Connection* connection, char* query,
+                          QueryParams* params)
+{
+  PGresult* result =
+    PQexecParams(connection->connection, query, params->count, NULL,
+                 params->values, params->lengths, params->formats, 0);
+
+  int success = (PQresultStatus(result) == PGRES_COMMAND_OK);
+
+  if (!success)
+  {
+    printf("Произошла ошибка при выполнении запроса: %s\n",
+           PQerrorMessage(connection->connection));
+  }
+  else
+  {
+    printf("Запрос выполнен успешно! Затронуто строк: %s\n",
+           PQcmdTuples(result));
+  }
+
+  PQclear(result);
+  return success;
 }
