@@ -1,6 +1,8 @@
 #include "raw_archive_header.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "file.h"
@@ -45,6 +47,10 @@ Result raw_archive_header_write(const RawArchiveHeader* header, File* file)
   {
     return RESULT_INVALID_ARGUMENT;
   }
+
+  printf("Сигнатура: %s\n", header->signature);
+  printf("Версия: %d\n", header->version);
+  printf("Исходный размер: %" PRIu64 "\n", header->original_size);
 
   return file_write_bytes(file, (const Byte*)header, sizeof(RawArchiveHeader));
 }

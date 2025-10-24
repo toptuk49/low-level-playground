@@ -212,6 +212,7 @@ Result file_table_read(FileTable* self, File* file)
     file_read_bytes_size(file, (Byte*)&self->count, sizeof(self->count));
   if (result != RESULT_OK)
   {
+    printf("Произошла ошибка при чтении количества файлов в таблице файлов!\n");
     return result;
   }
 
@@ -228,6 +229,8 @@ Result file_table_read(FileTable* self, File* file)
       file_read_bytes_size(file, (Byte*)&self->entries[i], sizeof(FileEntry));
     if (result != RESULT_OK)
     {
+      printf(
+        "Произошла ошибка при чтении конкретного файла из таблицы файлов!\n");
       free(self->entries);
       return result;
     }

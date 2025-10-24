@@ -144,6 +144,15 @@ Result raw_archive_builder_finalize(RawArchiveBuilder* self)
     return result;
   }
 
+  QWord current_offset = 0;
+
+  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+  {
+    FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
+    entry->offset = current_offset;
+    current_offset += entry->original_size;
+  }
+
   result = file_table_write(self->file_table, self->archive_file);
   if (result != RESULT_OK)
   {

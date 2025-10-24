@@ -36,6 +36,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   reader->archive_file = file_create(input_filename);
   if (reader->archive_file == NULL)
   {
+    printf("Произошла ошибка при создании файла архива!\n");
     free(reader);
     return NULL;
   }
@@ -43,6 +44,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   reader->file_table = file_table_create();
   if (reader->file_table == NULL)
   {
+    printf("Произошла ошибка при создании объекта таблицы файлов!\n");
     file_destroy(reader->archive_file);
     free(reader);
     return NULL;
@@ -51,12 +53,14 @@ CompressedArchiveReader* compressed_archive_reader_create(
   Result result = file_open_for_read(reader->archive_file);
   if (result != RESULT_OK)
   {
+    printf("Произошла ошибка при открытии архива для чтения!\n");
     goto error;
   }
 
   result = file_read_bytes(reader->archive_file);
   if (result != RESULT_OK)
   {
+    printf("Произошла ошибка при получении байтов архива!\n");
     goto error;
   }
 
@@ -65,13 +69,23 @@ CompressedArchiveReader* compressed_archive_reader_create(
 
   if (!compressed_archive_header_is_valid(&reader->header))
   {
+    printf("Заголовок архива некорректный!\n");
     result = RESULT_ERROR;
+    goto error;
+  }
+
+  result =
+    file_seek(reader->archive_file, COMPRESSED_ARCHIVE_HEADER_SIZE, SEEK_SET);
+  if (result != RESULT_OK)
+  {
+    printf("Ошибка позиционирования к таблице файлов!\n");
     goto error;
   }
 
   result = file_table_read(reader->file_table, reader->archive_file);
   if (result != RESULT_OK)
   {
+    printf("Произошла ошибка при чтении таблицы файлов!\n");
     goto error;
   }
 
@@ -117,12 +131,14 @@ static Result extract_single_file(CompressedArchiveReader* self,
                                entry->original_size, entry->offset);
   if (result != RESULT_OK)
   {
+    printf("Произошла ошибка при чтении конкретного места в архиве!\n");
     free(file_data);
     return result;
   }
   File* output_file = file_create(output_path);
   if (output_file == NULL)
   {
+    printf("Произошла ошибка при создании выходного файла!\n");
     free(file_data);
     return RESULT_MEMORY_ERROR;
   }

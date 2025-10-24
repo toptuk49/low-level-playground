@@ -60,7 +60,6 @@ RawArchiveReader* raw_archive_reader_create(const char* input_filename)
     goto error;
   }
 
-  // Читаем заголовок
   const Byte* data = file_get_buffer(reader->archive_file);
   memcpy(&reader->header, data, RAW_ARCHIVE_HEADER_SIZE);
 
@@ -71,7 +70,13 @@ RawArchiveReader* raw_archive_reader_create(const char* input_filename)
     goto error;
   }
 
-  // Читаем таблицу файлов
+  result = file_seek(reader->archive_file, RAW_ARCHIVE_HEADER_SIZE, SEEK_SET);
+  if (result != RESULT_OK)
+  {
+    printf("Произошла ошибка при переходе к таблице файлов!\n");
+    goto error;
+  }
+
   result = file_table_read(reader->file_table, reader->archive_file);
   if (result != RESULT_OK)
   {
