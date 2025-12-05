@@ -1,2 +1,3 @@
 add_subdirectory(compressed_archive_codec)
+add_subdirectory(huffman_analyzer)
 add_subdirectory(raw_archive_codec) 
