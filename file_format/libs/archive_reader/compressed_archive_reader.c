@@ -10,6 +10,7 @@
 #include "file_table.h"
 #include "huffman.h"
 #include "path_utils.h"
+#include "shannon.h"
 
 #define PATH_LIMIT 4096
 
@@ -20,7 +21,8 @@ struct CompressedArchiveReader
   CompressedArchiveHeader header;
   HuffmanTree* huffman_tree;  // Дерево Хаффмана (если используется)
   ArithmeticModel*
-    arithmetic_model;  // Арифметическая модель (если используется)
+    arithmetic_model;         // Арифметическая модель (если используется)
+  ShannonTree* shannon_tree;  // Дерево Шеннона (если используется)
 };
 
 CompressedArchiveReader* compressed_archive_reader_create(
@@ -58,6 +60,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
 
   reader->huffman_tree = NULL;
   reader->arithmetic_model = NULL;
+  reader->shannon_tree = NULL;
 
   printf("\n=== Открытие архива для чтения ===\n");
   printf("Файл: %s\n", input_filename);
@@ -87,6 +90,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   printf("Размер дерева Хаффмана: %u байт\n", reader->header.huffman_tree_size);
   printf("Размер арифметической модели: %u байт\n",
          reader->header.arithmetic_model_size);
+  printf("Размер дерева Шеннона: %u байт\n", reader->header.shannon_tree_size);
 
   if (!compressed_archive_header_is_valid(&reader->header))
   {
@@ -113,9 +117,11 @@ CompressedArchiveReader* compressed_archive_reader_create(
            entry->offset);
   }
 
-  if ((reader->header.flags & (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL)) &&
+  if ((reader->header.flags &
+       (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL | FLAG_SHANNON_TREE)) &&
       (reader->header.huffman_tree_size > 0 ||
-       reader->header.arithmetic_model_size > 0))
+       reader->header.arithmetic_model_size > 0 ||
+       reader->header.shannon_tree_size > 0))
   {
     QWord model_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
     model_offset += sizeof(DWord);  // file_count
@@ -228,6 +234,57 @@ CompressedArchiveReader* compressed_archive_reader_create(
 
       printf("Арифметическая модель десериализована успешно\n");
     }
+    else if ((reader->header.flags & FLAG_SHANNON_TREE) &&
+             reader->header.shannon_tree_size > 0 &&
+             reader->header.primary_compression == COMPRESSION_SHANNON)
+    {
+      printf("\n=== Чтение дерева Шеннона ===\n");
+      printf("Смещение дерева: %llu байт\n", model_offset);
+      printf("Размер дерева: %u байт\n", reader->header.shannon_tree_size);
+
+      model_size = reader->header.shannon_tree_size;
+      model_data = (Byte*)malloc(model_size * sizeof(Byte));
+      if (model_data == NULL)
+      {
+        printf("Произошла ошибка выделения памяти!\n");
+        goto error;
+      }
+
+      result = file_read_at(reader->archive_file, model_data, model_size,
+                            model_offset);
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при чтении дерева Шеннона!\n");
+        free(model_data);
+        goto error;
+      }
+
+      printf("Дерево прочитано успешно\n");
+
+      reader->shannon_tree = shannon_tree_create();
+
+      if (reader->shannon_tree == NULL)
+      {
+        printf("Произошла ошибка при создании дерева Шеннона!\n");
+        free(model_data);
+        goto error;
+      }
+
+      result =
+        shannon_deserialize_tree(reader->shannon_tree, model_data, model_size);
+
+      free(model_data);
+
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при десериализации дерева Шеннона!\n");
+        shannon_tree_destroy(reader->shannon_tree);
+        reader->shannon_tree = NULL;
+        goto error;
+      }
+
+      printf("Дерево Шеннона десериализовано успешно\n");
+    }
   }
   else
   {
@@ -256,6 +313,11 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
   if (self->arithmetic_model)
   {
     arithmetic_model_destroy(self->arithmetic_model);
+  }
+
+  if (self->shannon_tree)
+  {
+    shannon_tree_destroy(self->shannon_tree);
   }
 
   file_table_destroy(self->file_table);
@@ -310,6 +372,8 @@ static Result extract_single_file(CompressedArchiveReader* self,
            self->header.primary_compression == COMPRESSION_HUFFMAN ? "HUFFMAN"
            : self->header.primary_compression == COMPRESSION_ARITHMETIC
              ? "ARITHMETIC"
+           : self->header.primary_compression == COMPRESSION_SHANNON
+             ? "SHANNON"
              : "UNKNOWN");
 
     final_data = malloc(entry->original_size);
@@ -343,6 +407,17 @@ static Result extract_single_file(CompressedArchiveReader* self,
       result =
         arithmetic_decompress(file_data, entry->compressed_size, &final_data,
                               &expected_size, self->arithmetic_model);
+    }
+    else if (self->header.primary_compression == COMPRESSION_SHANNON &&
+             self->shannon_tree != NULL)
+    {
+      printf("Декомпрессия методом Шеннона...\n");
+      printf("  Входные данные: %llu байт\n", entry->compressed_size);
+      printf("  Ожидаемый размер: %llu байт\n", entry->original_size);
+
+      result =
+        shannon_decompress(file_data, entry->compressed_size, &final_data,
+                           &expected_size, self->shannon_tree);
     }
     else
     {

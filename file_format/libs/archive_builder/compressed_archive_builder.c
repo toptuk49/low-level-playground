@@ -12,6 +12,7 @@
 #include "file_table.h"
 #include "huffman.h"
 #include "path_utils.h"
+#include "shannon.h"
 
 #define DEFAULT_COMPRESSION_ALGORITHM COMPRESSION_ARITHMETIC
 
@@ -23,6 +24,7 @@ typedef struct
   {
     HuffmanTree* huffman_tree;
     ArithmeticModel* arithmetic_model;
+    ShannonTree* shannon_tree;
   };
   Byte* tree_model_data;
   Size tree_model_size;
@@ -109,6 +111,12 @@ Result compressed_archive_builder_set_algorithm(CompressedArchiveBuilder* self,
     self->selected_algorithm = COMPRESSION_ARITHMETIC;
     self->force_algorithm = true;
     printf("Принудительно установлен алгоритм: ARITHMETIC\n");
+  }
+  else if (strcmp(algorithm, "shannon") == 0 || strcmp(algorithm, "shan") == 0)
+  {
+    self->selected_algorithm = COMPRESSION_SHANNON;
+    self->force_algorithm = true;
+    printf("Принудительно установлен алгоритм: SHANNON\n");
   }
   else if (strcmp(algorithm, "none") == 0)
   {
@@ -513,6 +521,45 @@ static Result compress_file_data(const char* filename,
                                    &compressed_data->tree_model_size);
     }
   }
+  else if (algorithm == COMPRESSION_SHANNON)
+  {
+    ShannonTree* tree = shannon_tree_create();
+    if (tree == NULL)
+    {
+      file_close(input_file);
+      file_destroy(input_file);
+      return RESULT_MEMORY_ERROR;
+    }
+
+    if (all_data && all_data_size > 0)
+    {
+      result = shannon_tree_build(tree, all_data, all_data_size);
+    }
+    else
+    {
+      result = shannon_tree_build(tree, original_data, original_size);
+    }
+
+    if (result != RESULT_OK)
+    {
+      shannon_tree_destroy(tree);
+      file_close(input_file);
+      file_destroy(input_file);
+      return result;
+    }
+
+    compressed_data->shannon_tree = tree;
+
+    result = shannon_compress(original_data, original_size,
+                              &compressed_data->compressed_data,
+                              &compressed_data->compressed_size, tree);
+
+    if (result == RESULT_OK)
+    {
+      result = shannon_serialize_tree(tree, &compressed_data->tree_model_data,
+                                      &compressed_data->tree_model_size);
+    }
+  }
   else
   {
     compressed_data->compressed_data = malloc(original_size);
@@ -558,6 +605,13 @@ static void free_compressed_file_data(CompressedFileData* data)
         arithmetic_model_destroy(data->arithmetic_model);
       }
     }
+    else if (data->algorithm == COMPRESSION_SHANNON)
+    {
+      if (data->shannon_tree)
+      {
+        shannon_tree_destroy(data->shannon_tree);
+      }
+    }
   }
 }
 
@@ -593,6 +647,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       printf("Используется принудительно выбранный алгоритм: %s\n",
              selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
              : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
+             : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON-FANO"
                                                             : "NONE");
     }
     else
@@ -604,11 +659,17 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         printf("Низкая энтропия, выбираем алгоритм Хаффмана\n");
         selected_algorithm = COMPRESSION_HUFFMAN;
       }
-      else if (entropy < 7.0)
+      else if (entropy < 6.0)
       {
         // Средняя энтропия - арифметическое кодирование
         printf("Средняя энтропия, выбираем арифметическое кодирование\n");
         selected_algorithm = COMPRESSION_ARITHMETIC;
+      }
+      else if (entropy < 7.5)
+      {
+        // Средне-высокая энтропия - Шеннон
+        printf("Средне-высокая энтропия, выбираем алгоритм Шеннона\n");
+        selected_algorithm = COMPRESSION_SHANNON;
       }
       else
       {
@@ -674,6 +735,34 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         }
       }
     }
+    else if (selected_algorithm == COMPRESSION_SHANNON)
+    {
+      ShannonTree* tree = shannon_tree_create();
+      if (tree)
+      {
+        Result result =
+          shannon_tree_build(tree, self->all_data, self->all_data_size);
+        if (result == RESULT_OK)
+        {
+          result =
+            shannon_serialize_tree(tree, &tree_model_data, &tree_model_size);
+          if (result == RESULT_OK)
+          {
+            compression_model = tree;
+          }
+          else
+          {
+            shannon_tree_destroy(tree);
+            selected_algorithm = COMPRESSION_NONE;
+          }
+        }
+        else
+        {
+          shannon_tree_destroy(tree);
+          selected_algorithm = COMPRESSION_NONE;
+        }
+      }
+    }
   }
 
   self->selected_algorithm = selected_algorithm;
@@ -690,6 +779,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
   {
     flags |= FLAG_COMPRESSED | FLAG_ARITHMETIC_MODEL;
   }
+  else if (selected_algorithm == COMPRESSION_SHANNON)
+  {
+    flags |= FLAG_COMPRESSED | FLAG_SHANNON_TREE;
+  }
 
   CompressedArchiveHeader header;
   compressed_archive_header_init(
@@ -700,29 +793,40 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
   {
     header.huffman_tree_size = (DWord)tree_model_size;
     header.arithmetic_model_size = 0;
+    header.shannon_tree_size = 0;
   }
   else if (selected_algorithm == COMPRESSION_ARITHMETIC)
   {
     header.huffman_tree_size = 0;
     header.arithmetic_model_size = (DWord)tree_model_size;
+    header.shannon_tree_size = 0;
+  }
+  else if (selected_algorithm == COMPRESSION_SHANNON)
+  {
+    header.huffman_tree_size = 0;
+    header.arithmetic_model_size = 0;
+    header.shannon_tree_size = (DWord)tree_model_size;
   }
   else
   {
     header.huffman_tree_size = 0;
     header.arithmetic_model_size = 0;
+    header.shannon_tree_size = 0;
   }
 
   printf("\n=== Создание заголовка ===\n");
   printf("Алгоритм сжатия: %s\n",
          selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
          : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
+         : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON-FANO"
                                                         : "NONE");
   printf("Флаги: 0x%08X\n", flags);
   printf("Размер модели/дерева: %u байт\n",
          selected_algorithm == COMPRESSION_HUFFMAN ? header.huffman_tree_size
          : selected_algorithm == COMPRESSION_ARITHMETIC
            ? header.arithmetic_model_size
-           : 0);
+         : selected_algorithm == COMPRESSION_SHANNON ? header.shannon_tree_size
+                                                     : 0);
 
   Result result = compressed_archive_header_write(&header, self->archive_file);
   if (result != RESULT_OK)
@@ -738,6 +842,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       else if (selected_algorithm == COMPRESSION_ARITHMETIC)
       {
         arithmetic_model_destroy((ArithmeticModel*)compression_model);
+      }
+      else if (selected_algorithm == COMPRESSION_SHANNON)
+      {
+        shannon_tree_destroy((ShannonTree*)compression_model);
       }
     }
 
@@ -794,6 +902,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         else if (selected_algorithm == COMPRESSION_ARITHMETIC)
         {
           arithmetic_model_destroy((ArithmeticModel*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_SHANNON)
+        {
+          shannon_tree_destroy((ShannonTree*)compression_model);
         }
       }
 
@@ -866,6 +978,14 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
             arithmetic_model_destroy(compressed_file_data.arithmetic_model);
           }
         }
+        else if (selected_algorithm == COMPRESSION_SHANNON)
+        {
+          if (compressed_file_data.shannon_tree &&
+              compressed_file_data.shannon_tree != compression_model)
+          {
+            shannon_tree_destroy(compressed_file_data.shannon_tree);
+          }
+        }
       }
       else
       {
@@ -915,6 +1035,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       {
         arithmetic_model_destroy((ArithmeticModel*)compression_model);
       }
+      else if (selected_algorithm == COMPRESSION_SHANNON)
+      {
+        shannon_tree_destroy((ShannonTree*)compression_model);
+      }
     }
 
     free(tree_model_data);
@@ -922,7 +1046,8 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     tree_model_size = 0;
     selected_algorithm = COMPRESSION_NONE;
 
-    flags &= ~(FLAG_COMPRESSED | FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL);
+    flags &= ~(FLAG_COMPRESSED | FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL |
+               FLAG_SHANNON_TREE);
     flags |=
       file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
 
@@ -932,6 +1057,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
 
     header.huffman_tree_size = 0;
     header.arithmetic_model_size = 0;
+    header.shannon_tree_size = 0;
 
     file_seek(self->archive_file, 0, SEEK_SET);
     result = compressed_archive_header_write(&header, self->archive_file);
@@ -976,6 +1102,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       {
         arithmetic_model_destroy((ArithmeticModel*)compression_model);
       }
+      else if (selected_algorithm == COMPRESSION_SHANNON)
+      {
+        shannon_tree_destroy((ShannonTree*)compression_model);
+      }
     }
 
     free(tree_model_data);
@@ -1003,7 +1133,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
 
   printf("Таблица файлов записана успешно\n");
 
-  // Шаг 5: Записываем дерево Хаффмана или арифметическую модель (если есть)
+  // Шаг 5: Записываем дерево/модель сжатия (если есть)
   if (selected_algorithm != COMPRESSION_NONE && tree_model_data &&
       tree_model_size > 0)
   {
@@ -1025,6 +1155,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         else if (selected_algorithm == COMPRESSION_ARITHMETIC)
         {
           arithmetic_model_destroy((ArithmeticModel*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_SHANNON)
+        {
+          shannon_tree_destroy((ShannonTree*)compression_model);
         }
       }
 
@@ -1105,6 +1239,10 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     {
       arithmetic_model_destroy((ArithmeticModel*)compression_model);
     }
+    else if (selected_algorithm == COMPRESSION_SHANNON)
+    {
+      shannon_tree_destroy((ShannonTree*)compression_model);
+    }
   }
 
   free(tree_model_data);
@@ -1140,6 +1278,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
   printf("Режим: %s\n",
          selected_algorithm == COMPRESSION_HUFFMAN      ? "СЖАТЫЙ (Huffman)"
          : selected_algorithm == COMPRESSION_ARITHMETIC ? "СЖАТЫЙ (Arithmetic)"
+         : selected_algorithm == COMPRESSION_SHANNON    ? "СЖАТЫЙ (Shannon)"
                                                         : "НЕСЖАТЫЙ");
   printf("Файлов в архиве: %u\n", file_table_get_count(self->file_table));
 

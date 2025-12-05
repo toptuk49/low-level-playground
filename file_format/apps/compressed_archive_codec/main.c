@@ -21,12 +21,13 @@ typedef enum
   ALGORITHM_AUTO,  // Автовыбор (по умолчанию)
   ALGORITHM_HUFFMAN,
   ALGORITHM_ARITHMETIC,
+  ALGORITHM_SHANNON,
   ALGORITHM_NONE,
   ALGORITHM_UNKNOWN,
 } CompressionAlgorithmChoice;
 
 static OperationMode parse_operation_mode(const char* mode_str);
-static CompressionAlgorithmChoice parse_algorithm(const char* algo_str);
+static CompressionAlgorithmChoice parse_algorithm(const char* algorithm);
 static const char* algorithm_to_string(CompressionAlgorithmChoice algo);
 static void print_usage();
 
@@ -81,6 +82,9 @@ int main(int argc, char** argv)
         break;
       case ALGORITHM_ARITHMETIC:
         algorithm_str = "arithmetic";
+        break;
+      case ALGORITHM_SHANNON:
+        algorithm_str = "shannon";
         break;
       case ALGORITHM_NONE:
         algorithm_str = "none";
@@ -163,6 +167,12 @@ static CompressionAlgorithmChoice parse_algorithm(const char* algorithm)
     return ALGORITHM_ARITHMETIC;
   }
 
+  if (strcmp(algorithm, "shannon") == 0 || strcmp(algorithm, "shan") == 0 ||
+      strcmp(algorithm, "s") == 0)
+  {
+    return ALGORITHM_SHANNON;
+  }
+
   if (strcmp(algorithm, "none") == 0 || strcmp(algorithm, "n") == 0)
   {
     return ALGORITHM_NONE;
@@ -179,6 +189,8 @@ static const char* algorithm_to_string(CompressionAlgorithmChoice algorithm)
       return "HUFFMAN";
     case ALGORITHM_ARITHMETIC:
       return "ARITHMETIC";
+    case ALGORITHM_SHANNON:
+      return "SHANNON";
     case ALGORITHM_NONE:
       return "NONE (без сжатия)";
     case ALGORITHM_AUTO:
@@ -199,6 +211,7 @@ static void print_usage()
   printf("  auto, a     - автоматический выбор (по умолчанию)\n");
   printf("  huffman, huff, h  - алгоритм Хаффмана\n");
   printf("  arithmetic, arith - арифметическое кодирование\n");
+  printf("  shannon, shan, s  - алгоритм Шеннона\n");
   printf("  none, n     - без сжатия\n");
   printf("\nПримеры:\n");
   printf(
@@ -207,6 +220,9 @@ static void print_usage()
   printf(
     "  compressed_archive_codec --mode encode --algorithm arithmetic --input "
     "data.bin --output data.arith\n");
+  printf(
+    "  compressed_archive_codec --mode encode --algorithm shannon --input "
+    "text.txt --output text.shannon\n");
   printf(
     "  compressed_archive_codec --mode decode --input archive.compressed "
     "--output extracted\n");

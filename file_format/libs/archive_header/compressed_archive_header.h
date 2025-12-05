@@ -16,6 +16,7 @@ typedef enum
   COMPRESSION_NONE = 0,
   COMPRESSION_HUFFMAN = 1,
   COMPRESSION_ARITHMETIC = 2,
+  COMPRESSION_SHANNON = 3,
 } CompressionAlgorithm;
 
 typedef enum
@@ -27,12 +28,13 @@ typedef enum
 typedef enum
 {
   FLAG_NONE = 0,
-  FLAG_DIRECTORY = 1 << 0,        // Архив содержит папки
-  FLAG_COMPRESSED = 1 << 1,       // Данные сжаты
-  FLAG_ENCRYPTED = 1 << 2,        // Данные зашифрованы
-  FLAG_METADATA = 1 << 3,         // Содержит метаданные
-  FLAG_HUFFMAN_TREE = 1 << 4,     // Содержит дерево Хаффмана
-  FLAG_ARITHMETIC_MODEL = 1 << 5  // Флаг для арифметической модели
+  FLAG_DIRECTORY = 1 << 0,         // Архив содержит папки
+  FLAG_COMPRESSED = 1 << 1,        // Данные сжаты
+  FLAG_ENCRYPTED = 1 << 2,         // Данные зашифрованы
+  FLAG_METADATA = 1 << 3,          // Содержит метаданные
+  FLAG_HUFFMAN_TREE = 1 << 4,      // Содержит дерево Хаффмана
+  FLAG_ARITHMETIC_MODEL = 1 << 5,  // Содержит арифметическую модель
+  FLAG_SHANNON_TREE = 1 << 6       // Содержит дерево Шеннона-Фано
 } CompressedArchiveFlags;
 
 typedef struct
@@ -55,6 +57,7 @@ typedef struct
   DWord compressed_size;        // Размер сжатых данных
   DWord huffman_tree_size;      // Размер сериализованного дерева Хаффмана
   DWord arithmetic_model_size;  // Размер сериализованной арифметической модели
+  DWord shannon_tree_size;      // Размер сериализованного дерева Шеннона-Фано
 
   // Контрольные суммы
   DWord header_crc;
