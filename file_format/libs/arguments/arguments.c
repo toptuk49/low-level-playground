@@ -13,6 +13,7 @@ struct ProgramArguments
   char* mode;
   char* input;
   char* output;
+  char* algorithm;
 };
 
 ProgramArguments* program_arguments_create(void)
@@ -27,6 +28,7 @@ ProgramArguments* program_arguments_create(void)
   args->mode = NULL;
   args->input = NULL;
   args->output = NULL;
+  args->algorithm = NULL;
 
   return args;
 }
@@ -41,6 +43,7 @@ void program_arguments_destroy(ProgramArguments* self)
   free(self->mode);
   free(self->input);
   free(self->output);
+  free(self->algorithm);
   free(self);
 }
 
@@ -55,6 +58,7 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
   static struct option long_options[] = {{"mode", required_argument, 0, 0},
                                          {"input", required_argument, 0, 0},
                                          {"output", required_argument, 0, 0},
+                                         {"algorithm", required_argument, 0, 0},
                                          {0, 0, 0, 0}};
 
   optind = 1;  // Reset getopt
@@ -106,6 +110,18 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
             return false;
           }
           strcpy(self->output, optarg);
+          break;
+        case 3:  // --algorithm
+          free(self->algorithm);
+
+          self->algorithm = (char*)malloc(strlen(optarg) + 1);
+          if (self->algorithm == NULL)
+          {
+            printf(
+              "Произошла ошибка выделения памяти для аргумента algorithm!\n");
+            return false;
+          }
+          strcpy(self->algorithm, optarg);
           break;
         default:
           printf("Обнаружен неизвестный аргумент командной строки!\n");
@@ -163,4 +179,9 @@ const char* program_arguments_get_input(const ProgramArguments* self)
 const char* program_arguments_get_output(const ProgramArguments* self)
 {
   return self ? self->output : NULL;
+}
+
+const char* program_arguments_get_algorithm(const ProgramArguments* self)
+{
+  return self ? self->algorithm : NULL;
 }

@@ -1,7 +1,7 @@
 add_executable(compressed_archive_codec main.c coder.c decoder.c)
 
 target_link_libraries(compressed_archive_codec PRIVATE
-    arguments common archive_builder archive_reader
+    arguments arithmetic common archive_builder archive_reader
 )
 
 target_include_directories(compressed_archive_codec PRIVATE 
