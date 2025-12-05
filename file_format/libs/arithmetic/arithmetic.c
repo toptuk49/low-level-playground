@@ -8,6 +8,11 @@
 
 #include "types.h"
 
+#define ARITHMETIC_FULL_RANGE 0x100000000ULL    // 2^32
+#define ARITHMETIC_HALF_RANGE 0x80000000ULL     // 2^31
+#define ARITHMETIC_QUARTER_RANGE 0x40000000ULL  // 2^30
+#define ARITHMETIC_MAX_TOTAL 0x10000000UL  // Максимальная сумма частот (2^28)
+
 ArithmeticModel* arithmetic_model_create(void)
 {
   ArithmeticModel* model = malloc(sizeof(ArithmeticModel));
@@ -43,57 +48,54 @@ Result arithmetic_model_build(ArithmeticModel* model, const Byte* data,
   }
 
   DWord frequencies[ARITHMETIC_MAX_SYMBOLS] = {0};
+
   for (Size i = 0; i < size; i++)
   {
-    frequencies[data[i]]++;
+    if (data[i] < (Byte)ARITHMETIC_MAX_SYMBOLS)
+    {
+      frequencies[data[i]]++;
+    }
   }
 
   model->cumulative[0] = 0;
   for (int i = 0; i < ARITHMETIC_MAX_SYMBOLS; i++)
   {
-    model->cumulative[i + 1] = model->cumulative[i] + frequencies[i];
+    DWord freq = frequencies[i];
+    if (freq == 0)
+    {
+      freq = 1;  // Минимальная частота для всех символов
+    }
+    model->cumulative[i + 1] = model->cumulative[i] + freq;
   }
+
   model->total = model->cumulative[ARITHMETIC_MAX_SYMBOLS];
 
-  if (model->total == 0)
+  if (model->total > ARITHMETIC_MAX_TOTAL)
   {
     for (int i = 0; i <= ARITHMETIC_MAX_SYMBOLS; i++)
     {
-      model->cumulative[i] = i;
+      model->cumulative[i] = (model->cumulative[i] + 1) >> 1;
     }
-    model->total = ARITHMETIC_MAX_SYMBOLS;
+    model->total = model->cumulative[ARITHMETIC_MAX_SYMBOLS];
   }
+
+  printf("[ARITHMETIC] Модель построена: total=%u (масштаб 1:%u)\n",
+         model->total, model->total / ARITHMETIC_MAX_SYMBOLS);
 
   return RESULT_OK;
 }
 
 void arithmetic_model_update(ArithmeticModel* model, Byte symbol)
 {
-  if (!model)
-  {
-    return;
-  }
-
-  for (int i = symbol + 1; i <= ARITHMETIC_MAX_SYMBOLS; i++)
-  {
-    model->cumulative[i]++;
-  }
-  model->total++;
-
-  if (model->total > (1U << 20))
-  {
-    for (int i = 1; i <= ARITHMETIC_MAX_SYMBOLS; i++)
-    {
-      model->cumulative[i] = (model->cumulative[i] + 1) / 2;
-    }
-    model->total = model->cumulative[ARITHMETIC_MAX_SYMBOLS];
-  }
+  // Не используется в этой реализации
+  (void)model;
+  (void)symbol;
 }
 
 static void arithmetic_encoder_init(ArithmeticEncoder* encoder)
 {
   encoder->low = 0;
-  encoder->high = 0xFFFFFFFFU;  // Все 32 бита установлены в 1
+  encoder->high = 0xFFFFFFFFU;
   encoder->scale = 0;
   encoder->underflow_bits = 0;
 }
@@ -105,7 +107,7 @@ static void arithmetic_encoder_write_bit(ArithmeticEncoder* encoder, int bit,
 {
   if (*buffer_position >= *buffer_capacity * 8)
   {
-    *buffer_capacity *= 2;
+    *buffer_capacity = (*buffer_capacity == 0) ? 1024 : *buffer_capacity * 2;
     Byte* new_buffer = (Byte*)realloc(*output, *buffer_capacity);
 
     if (new_buffer == NULL)
@@ -114,6 +116,10 @@ static void arithmetic_encoder_write_bit(ArithmeticEncoder* encoder, int bit,
     }
 
     *output = new_buffer;
+    if (*buffer_capacity > 0)
+    {
+      memset(*output + (*buffer_capacity / 2), 0, *buffer_capacity / 2);
+    }
   }
 
   Size byte_index = *buffer_position / 8;
@@ -134,40 +140,41 @@ static void arithmetic_encoder_normalize(ArithmeticEncoder* encoder,
                                          Size* buffer_position,
                                          Size* buffer_capacity)
 {
-  while (true)
+  while ((encoder->high - encoder->low) < ARITHMETIC_QUARTER_RANGE)
   {
-    if (encoder->high < ARITHMETIC_SECOND_BIT)
+    if (encoder->high < ARITHMETIC_HALF_RANGE)
     {
       arithmetic_encoder_write_bit(encoder, 0, output, output_size,
                                    buffer_position, buffer_capacity);
 
-      for (; encoder->underflow_bits > 0; encoder->underflow_bits--)
+      while (encoder->underflow_bits > 0)
       {
         arithmetic_encoder_write_bit(encoder, 1, output, output_size,
                                      buffer_position, buffer_capacity);
+        encoder->underflow_bits--;
       }
     }
-    else if (encoder->low >= ARITHMETIC_SECOND_BIT)
+    else if (encoder->low >= ARITHMETIC_HALF_RANGE)
     {
       arithmetic_encoder_write_bit(encoder, 1, output, output_size,
                                    buffer_position, buffer_capacity);
 
-      for (; encoder->underflow_bits > 0; encoder->underflow_bits--)
+      while (encoder->underflow_bits > 0)
       {
         arithmetic_encoder_write_bit(encoder, 0, output, output_size,
                                      buffer_position, buffer_capacity);
+        encoder->underflow_bits--;
       }
 
-      encoder->low -= ARITHMETIC_SECOND_BIT;
-      encoder->high -= ARITHMETIC_SECOND_BIT;
+      encoder->low -= ARITHMETIC_HALF_RANGE;
+      encoder->high -= ARITHMETIC_HALF_RANGE;
     }
-    else if (encoder->low >= ARITHMETIC_TOP_BIT &&
-             encoder->high < (3 * ARITHMETIC_TOP_BIT))
+    else if (encoder->low >= ARITHMETIC_QUARTER_RANGE &&
+             encoder->high < (ARITHMETIC_HALF_RANGE | ARITHMETIC_QUARTER_RANGE))
     {
-      // Старшие биты 01 и 10 (близко к середине)
       encoder->underflow_bits++;
-      encoder->low -= ARITHMETIC_TOP_BIT;
-      encoder->high -= ARITHMETIC_TOP_BIT;
+      encoder->low -= ARITHMETIC_QUARTER_RANGE;
+      encoder->high -= ARITHMETIC_QUARTER_RANGE;
     }
     else
     {
@@ -176,7 +183,7 @@ static void arithmetic_encoder_normalize(ArithmeticEncoder* encoder,
 
     encoder->low <<= 1;
     encoder->high <<= 1;
-    encoder->high |= 1;  // Устанавливаем младший бит
+    encoder->high |= 1;
   }
 }
 
@@ -184,29 +191,28 @@ static void arithmetic_encoder_finish(ArithmeticEncoder* encoder, Byte** output,
                                       Size* output_size, Size* buffer_position,
                                       Size* buffer_capacity)
 {
-  // Выбираем окончательное значение в диапазоне [low, high]
-  // Обычно выбираем low или что-то близкое к low
-
   encoder->underflow_bits++;
 
-  if (encoder->low < ARITHMETIC_TOP_BIT)
+  if (encoder->low < ARITHMETIC_QUARTER_RANGE)
   {
     arithmetic_encoder_write_bit(encoder, 0, output, output_size,
                                  buffer_position, buffer_capacity);
-    for (; encoder->underflow_bits > 0; encoder->underflow_bits--)
+    while (encoder->underflow_bits > 0)
     {
       arithmetic_encoder_write_bit(encoder, 1, output, output_size,
                                    buffer_position, buffer_capacity);
+      encoder->underflow_bits--;
     }
   }
   else
   {
     arithmetic_encoder_write_bit(encoder, 1, output, output_size,
                                  buffer_position, buffer_capacity);
-    for (; encoder->underflow_bits > 0; encoder->underflow_bits--)
+    while (encoder->underflow_bits > 0)
     {
       arithmetic_encoder_write_bit(encoder, 0, output, output_size,
                                    buffer_position, buffer_capacity);
+      encoder->underflow_bits--;
     }
   }
 
@@ -225,6 +231,12 @@ Result arithmetic_compress(const Byte* input, Size input_size, Byte** output,
     return RESULT_INVALID_ARGUMENT;
   }
 
+  if (model->total == 0)
+  {
+    printf("[ARITHMETIC] Ошибка: модель имеет нулевую сумму частот\n");
+    return RESULT_INVALID_ARGUMENT;
+  }
+
   printf("[ARITHMETIC] Начало арифметического кодирования\n");
   printf("[ARITHMETIC] Размер входных данных: %zu байт\n", input_size);
   printf("[ARITHMETIC] Общее количество символов в модели: %u\n", model->total);
@@ -232,11 +244,11 @@ Result arithmetic_compress(const Byte* input, Size input_size, Byte** output,
   ArithmeticEncoder encoder;
   arithmetic_encoder_init(&encoder);
 
-  Size buffer_capacity = (input_size * 2) + 1024;  // Начальная емкость
-
+  Size buffer_capacity = 1024;
   *output = malloc(buffer_capacity);
   if (*output == NULL)
   {
+    printf("[ARITHMETIC] Ошибка: не удалось выделить память\n");
     return RESULT_MEMORY_ERROR;
   }
 
@@ -248,34 +260,48 @@ Result arithmetic_compress(const Byte* input, Size input_size, Byte** output,
   {
     Byte symbol = input[i];
 
+    if (symbol >= (Byte)ARITHMETIC_MAX_SYMBOLS)
+    {
+      printf("[ARITHMETIC] Ошибка: некорректный символ %u\n", symbol);
+      free(*output);
+      *output = NULL;
+      return RESULT_INVALID_ARGUMENT;
+    }
+
     DWord symbol_low = model->cumulative[symbol];
     DWord symbol_high = model->cumulative[symbol + 1];
 
-    DWord range = encoder.high - encoder.low + 1;
+    QWord range = (QWord)(encoder.high - encoder.low) + 1;
 
-    DWord new_low = encoder.low + (range * symbol_low) / model->total;
-    DWord new_high = encoder.low + (range * symbol_high) / model->total - 1;
+    QWord new_low = encoder.low + (range * symbol_low) / model->total;
+    QWord new_high = encoder.low + (range * symbol_high) / model->total - 1;
 
-    encoder.low = new_low;
-    encoder.high = new_high;
+    encoder.low = (DWord)new_low;
+    encoder.high = (DWord)new_high;
 
     arithmetic_encoder_normalize(&encoder, output, output_size,
                                  &buffer_position, &buffer_capacity);
-
-    if (i < 10)
-    {
-      printf("[ARITHMETIC] Закодирован символ %u (0x%02X) [%u-%u]\n", symbol,
-             symbol, symbol_low, symbol_high);
-    }
   }
 
   arithmetic_encoder_finish(&encoder, output, output_size, &buffer_position,
                             &buffer_capacity);
 
+  if (*output_size > 0)
+  {
+    Byte* trimmed_output = (Byte*)realloc(*output, *output_size);
+    if (trimmed_output != NULL)
+    {
+      *output = trimmed_output;
+    }
+  }
+
   printf("[ARITHMETIC] Кодирование завершено\n");
   printf("[ARITHMETIC] Размер выходных данных: %zu байт\n", *output_size);
-  printf("[ARITHMETIC] Коэффициент сжатия: %.2f%%\n",
-         (1.0 - (double)*output_size / (double)input_size) * 100);
+  if (input_size > 0)
+  {
+    double ratio = (1.0 - (double)*output_size / (double)input_size) * 100;
+    printf("[ARITHMETIC] Коэффициент сжатия: %.2f%%\n", ratio);
+  }
 
   return RESULT_OK;
 }
@@ -324,27 +350,26 @@ static int arithmetic_decoder_read_bit(ArithmeticDecoder* decoder)
 
 static void arithmetic_decoder_normalize(ArithmeticDecoder* decoder)
 {
-  while (true)
+  while ((decoder->high - decoder->low) < ARITHMETIC_QUARTER_RANGE)
   {
-    if (decoder->high < ARITHMETIC_SECOND_BIT)
+    if (decoder->high < ARITHMETIC_HALF_RANGE)
     {
-      // Оба старших бита 0
-      // Ничего не делаем
+      // Оба старших бита 0 - ничего не делаем с value
     }
-    else if (decoder->low >= ARITHMETIC_SECOND_BIT)
+    else if (decoder->low >= ARITHMETIC_HALF_RANGE)
     {
       // Оба старших бита 1
-      decoder->value -= ARITHMETIC_SECOND_BIT;
-      decoder->low -= ARITHMETIC_SECOND_BIT;
-      decoder->high -= ARITHMETIC_SECOND_BIT;
+      decoder->value -= ARITHMETIC_HALF_RANGE;
+      decoder->low -= ARITHMETIC_HALF_RANGE;
+      decoder->high -= ARITHMETIC_HALF_RANGE;
     }
-    else if (decoder->low >= ARITHMETIC_TOP_BIT &&
-             decoder->high < (3 * ARITHMETIC_TOP_BIT))
+    else if (decoder->low >= ARITHMETIC_QUARTER_RANGE &&
+             decoder->high < (ARITHMETIC_HALF_RANGE | ARITHMETIC_QUARTER_RANGE))
     {
       // Старшие биты 01 и 10
-      decoder->value -= ARITHMETIC_TOP_BIT;
-      decoder->low -= ARITHMETIC_TOP_BIT;
-      decoder->high -= ARITHMETIC_TOP_BIT;
+      decoder->value -= ARITHMETIC_QUARTER_RANGE;
+      decoder->low -= ARITHMETIC_QUARTER_RANGE;
+      decoder->high -= ARITHMETIC_QUARTER_RANGE;
     }
     else
     {
@@ -355,8 +380,9 @@ static void arithmetic_decoder_normalize(ArithmeticDecoder* decoder)
     decoder->low <<= 1;
     decoder->high <<= 1;
     decoder->high |= 1;
-    decoder->value =
-      (decoder->value << 1) | arithmetic_decoder_read_bit(decoder);
+
+    int bit = arithmetic_decoder_read_bit(decoder);
+    decoder->value = (decoder->value << 1) | bit;
   }
 }
 
@@ -366,6 +392,12 @@ Result arithmetic_decompress(const Byte* input, Size input_size, Byte** output,
   if (!input || !output || !output_size || !model || input_size == 0)
   {
     printf("[ARITHMETIC] Ошибка: неверные параметры в arithmetic_decompress\n");
+    return RESULT_INVALID_ARGUMENT;
+  }
+
+  if (model->total == 0)
+  {
+    printf("[ARITHMETIC] Ошибка: модель имеет нулевую сумму частот\n");
     return RESULT_INVALID_ARGUMENT;
   }
 
@@ -380,15 +412,19 @@ Result arithmetic_decompress(const Byte* input, Size input_size, Byte** output,
   *output = malloc(*output_size);
   if (*output == NULL)
   {
-    printf("Произошла ошибка при выделении памяти!\n");
+    printf(
+      "[ARITHMETIC] Ошибка: не удалось выделить память для выходных данных\n");
     return RESULT_MEMORY_ERROR;
   }
 
+  memset(*output, 0, *output_size);
+
   for (Size i = 0; i < *output_size; i++)
   {
-    DWord range = decoder.high - decoder.low + 1;
-    DWord scaled_value =
-      ((decoder.value - decoder.low + 1) * model->total - 1) / range;
+    QWord range = (QWord)(decoder.high - decoder.low) + 1;
+
+    QWord temp = (QWord)(decoder.value - decoder.low + 1) * model->total - 1;
+    QWord scaled_value = temp / range;
 
     Byte symbol = 0;
     for (int current_symbol = 0; current_symbol < ARITHMETIC_MAX_SYMBOLS;
@@ -406,30 +442,16 @@ Result arithmetic_decompress(const Byte* input, Size input_size, Byte** output,
     DWord symbol_low = model->cumulative[symbol];
     DWord symbol_high = model->cumulative[symbol + 1];
 
-    DWord new_low = decoder.low + (range * symbol_low) / model->total;
-    DWord new_high = decoder.low + (range * symbol_high) / model->total - 1;
+    QWord new_low = decoder.low + (range * symbol_low) / model->total;
+    QWord new_high = decoder.low + (range * symbol_high) / model->total - 1;
 
-    decoder.low = new_low;
-    decoder.high = new_high;
+    decoder.low = (DWord)new_low;
+    decoder.high = (DWord)new_high;
 
     arithmetic_decoder_normalize(&decoder);
-
-    if (i < 10)
-    {
-      printf(
-        "[ARITHMETIC] Декодирован символ %u (0x%02X '%c') на позиции %zu\n",
-        symbol, symbol, isprint(symbol) ? symbol : '.', i);
-    }
   }
 
   printf("[ARITHMETIC] Декодирование завершено\n");
-
-  printf("[ARITHMETIC] Первые 16 байт декодированных данных: ");
-  for (int i = 0; i < 16 && i < *output_size; i++)
-  {
-    printf("%02X ", (*output)[i]);
-  }
-  printf("\n");
 
   return RESULT_OK;
 }
@@ -447,7 +469,9 @@ Result arithmetic_serialize_model(const ArithmeticModel* model, Byte** data,
   *data = malloc(*size);
   if (*data == NULL)
   {
-    printf("Произошла ошибка при выделении памяти!\n");
+    printf(
+      "[ARITHMETIC] Ошибка: не удалось выделить память для сериализации "
+      "модели\n");
     return RESULT_MEMORY_ERROR;
   }
 
@@ -470,6 +494,7 @@ Result arithmetic_deserialize_model(ArithmeticModel* model, const Byte* data,
 {
   if (!model || !data || size != (256 * sizeof(DWord) + sizeof(DWord)))
   {
+    printf("[ARITHMETIC] Ошибка: неверный размер данных модели\n");
     return RESULT_INVALID_ARGUMENT;
   }
 
@@ -481,6 +506,12 @@ Result arithmetic_deserialize_model(ArithmeticModel* model, const Byte* data,
     DWord frequency;
     memcpy(&frequency, pointer, sizeof(DWord));
     pointer += sizeof(DWord);
+
+    if (frequency == 0)
+    {
+      frequency = 1;
+    }
+
     model->cumulative[i + 1] = model->cumulative[i] + frequency;
   }
 
