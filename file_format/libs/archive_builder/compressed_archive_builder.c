@@ -647,7 +647,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       printf("Используется принудительно выбранный алгоритм: %s\n",
              selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
              : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
-             : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON-FANO"
+             : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON"
                                                             : "NONE");
     }
     else
@@ -818,7 +818,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
   printf("Алгоритм сжатия: %s\n",
          selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
          : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
-         : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON-FANO"
+         : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON"
                                                         : "NONE");
   printf("Флаги: 0x%08X\n", flags);
   printf("Размер модели/дерева: %u байт\n",
@@ -1288,8 +1288,6 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
 
   if (selected_algorithm != COMPRESSION_NONE)
   {
-    printf("\n=== Анализ эффективности сжатия ===\n");
-
     printf("\n=== Общий анализ архива ===\n");
     printf("Общий исходный размер: %llu байт\n",
            file_table_get_total_size(self->file_table));
