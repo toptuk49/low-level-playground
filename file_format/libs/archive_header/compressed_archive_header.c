@@ -20,7 +20,7 @@ bool compressed_archive_header_is_valid(const CompressedArchiveHeader* header)
     return false;
   }
 
-  if (header->version_major < COMPRESSED_ARCHIVE_VERSION_MAJOR)
+  if (header->version_major < 1 || header->version_major > 2)
   {
     return false;
   }
@@ -51,8 +51,16 @@ Result compressed_archive_header_init(CompressedArchiveHeader* header,
   header->header_size = COMPRESSED_ARCHIVE_HEADER_SIZE;
   header->metadata_size = 0;
   header->compressed_size = 0;
+  header->huffman_tree_size = 0;
+  header->arithmetic_model_size = 0;
   header->header_crc = 0;
   header->data_crc = 0;
+
+  if (header->version_major == 1)
+  {
+    header->huffman_tree_size = 0;
+    header->arithmetic_model_size = 0;
+  }
 
   CRC32Table* crc32_table = crc32_table_create();
   if (crc32_table == NULL)
@@ -64,10 +72,12 @@ Result compressed_archive_header_init(CompressedArchiveHeader* header,
                                         COMPRESSED_ARCHIVE_HEADER_SIZE);
   if (result != RESULT_OK)
   {
+    crc32_table_destroy(crc32_table);
     return RESULT_ERROR;
   }
 
   header->header_crc = crc32_table_get_crc32(crc32_table);
+  crc32_table_destroy(crc32_table);
 
   return RESULT_OK;
 }

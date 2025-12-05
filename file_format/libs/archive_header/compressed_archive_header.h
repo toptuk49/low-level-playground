@@ -8,14 +8,14 @@
 
 #define COMPRESSED_ARCHIVE_SIGNATURE "lolkek"
 #define COMPRESSED_ARCHIVE_SIGNATURE_SIZE 6
-#define COMPRESSED_ARCHIVE_VERSION_MAJOR 1
+#define COMPRESSED_ARCHIVE_VERSION_MAJOR 2
 #define COMPRESSED_ARCHIVE_VERSION_MINOR 0
 
 typedef enum
 {
   COMPRESSION_NONE = 0,
   COMPRESSION_HUFFMAN = 1,
-  // И так далее для разных алгоритмов
+  COMPRESSION_ARITHMETIC = 2,
 } CompressionAlgorithm;
 
 typedef enum
@@ -27,10 +27,12 @@ typedef enum
 typedef enum
 {
   FLAG_NONE = 0,
-  FLAG_DIRECTORY = 1 << 0,   // Архив содержит папки
-  FLAG_COMPRESSED = 1 << 1,  // Данные сжаты
-  FLAG_ENCRYPTED = 1 << 2,   // Данные зашифрованы
-  FLAG_METADATA = 1 << 3     // Содержит метаданные
+  FLAG_DIRECTORY = 1 << 0,        // Архив содержит папки
+  FLAG_COMPRESSED = 1 << 1,       // Данные сжаты
+  FLAG_ENCRYPTED = 1 << 2,        // Данные зашифрованы
+  FLAG_METADATA = 1 << 3,         // Содержит метаданные
+  FLAG_HUFFMAN_TREE = 1 << 4,     // Содержит дерево Хаффмана
+  FLAG_ARITHMETIC_MODEL = 1 << 5  // Флаг для арифметической модели
 } CompressedArchiveFlags;
 
 typedef struct
@@ -48,9 +50,11 @@ typedef struct
 
   // Флаги и служебные данные
   DWord flags;
-  DWord header_size;      // Полный размер заголовка
-  DWord metadata_size;    // Размер метаданных
-  DWord compressed_size;  // Размер сжатых данных
+  DWord header_size;            // Полный размер заголовка
+  DWord metadata_size;          // Размер метаданных
+  DWord compressed_size;        // Размер сжатых данных
+  DWord huffman_tree_size;      // Размер сериализованного дерева Хаффмана
+  DWord arithmetic_model_size;  // Размер сериализованной арифметической модели
 
   // Контрольные суммы
   DWord header_crc;
