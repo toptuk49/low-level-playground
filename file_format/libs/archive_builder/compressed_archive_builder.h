@@ -7,6 +7,10 @@ typedef struct CompressedArchiveBuilder CompressedArchiveBuilder;
 
 CompressedArchiveBuilder* compressed_archive_builder_create(
   const char* output_filename);
+
+Result compressed_archive_builder_set_algorithm(CompressedArchiveBuilder* self,
+                                                const char* algorithm);
+
 void compressed_archive_builder_destroy(CompressedArchiveBuilder* self);
 
 Result compressed_archive_builder_add_file(CompressedArchiveBuilder* self,
