@@ -1,7 +1,14 @@
 add_library(archive_builder SHARED raw_archive_builder.c compressed_archive_builder.c)
 
 target_link_libraries(archive_builder PUBLIC 
-    common archive_header arithmetic file_table huffman path_utils shannon
+    common
+    archive_header
+    arithmetic
+    file_table
+    huffman
+    path_utils
+    rle
+    shannon
 )
 
 target_include_directories(archive_builder PUBLIC

@@ -54,6 +54,7 @@ Result compressed_archive_header_init(CompressedArchiveHeader* header,
   header->huffman_tree_size = 0;
   header->arithmetic_model_size = 0;
   header->shannon_tree_size = 0;
+  header->rle_context_size = 0;
   header->header_crc = 0;
   header->data_crc = 0;
 
@@ -62,6 +63,7 @@ Result compressed_archive_header_init(CompressedArchiveHeader* header,
     header->huffman_tree_size = 0;
     header->arithmetic_model_size = 0;
     header->shannon_tree_size = 0;
+    header->rle_context_size = 0;
   }
 
   CRC32Table* crc32_table = crc32_table_create();

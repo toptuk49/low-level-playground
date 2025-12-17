@@ -22,6 +22,7 @@ typedef enum
   ALGORITHM_HUFFMAN,
   ALGORITHM_ARITHMETIC,
   ALGORITHM_SHANNON,
+  ALGORITHM_RLE,
   ALGORITHM_NONE,
   ALGORITHM_UNKNOWN,
 } CompressionAlgorithmChoice;
@@ -85,6 +86,9 @@ int main(int argc, char** argv)
         break;
       case ALGORITHM_SHANNON:
         algorithm_str = "shannon";
+        break;
+      case ALGORITHM_RLE:
+        algorithm_str = "rle";
         break;
       case ALGORITHM_NONE:
         algorithm_str = "none";
@@ -173,6 +177,11 @@ static CompressionAlgorithmChoice parse_algorithm(const char* algorithm)
     return ALGORITHM_SHANNON;
   }
 
+  if (strcmp(algorithm, "rle") == 0 || strcmp(algorithm, "r") == 0)
+  {
+    return ALGORITHM_RLE;
+  }
+
   if (strcmp(algorithm, "none") == 0 || strcmp(algorithm, "n") == 0)
   {
     return ALGORITHM_NONE;
@@ -191,6 +200,8 @@ static const char* algorithm_to_string(CompressionAlgorithmChoice algorithm)
       return "ARITHMETIC";
     case ALGORITHM_SHANNON:
       return "SHANNON";
+    case ALGORITHM_RLE:
+      return "RLE";
     case ALGORITHM_NONE:
       return "NONE (без сжатия)";
     case ALGORITHM_AUTO:
@@ -212,6 +223,7 @@ static void print_usage()
   printf("  huffman, huff, h  - алгоритм Хаффмана\n");
   printf("  arithmetic, arith - арифметическое кодирование\n");
   printf("  shannon, shan, s  - алгоритм Шеннона\n");
+  printf("  rle, r      - метод RLE\n");
   printf("  none, n     - без сжатия\n");
   printf("\nПримеры:\n");
   printf(
@@ -223,6 +235,9 @@ static void print_usage()
   printf(
     "  compressed_archive_codec --mode encode --algorithm shannon --input "
     "text.txt --output text.shannon\n");
+  printf(
+    "  compressed_archive_codec --mode encode --algorithm rle --input "
+    "text.txt --output text.rle\n");
   printf(
     "  compressed_archive_codec --mode decode --input archive.compressed "
     "--output extracted\n");

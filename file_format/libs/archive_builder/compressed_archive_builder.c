@@ -12,6 +12,7 @@
 #include "file_table.h"
 #include "huffman.h"
 #include "path_utils.h"
+#include "rle.h"
 #include "shannon.h"
 
 #define DEFAULT_COMPRESSION_ALGORITHM COMPRESSION_ARITHMETIC
@@ -25,6 +26,7 @@ typedef struct
     HuffmanTree* huffman_tree;
     ArithmeticModel* arithmetic_model;
     ShannonTree* shannon_tree;
+    RLEContext* rle_context;
   };
   Byte* tree_model_data;
   Size tree_model_size;
@@ -118,6 +120,12 @@ Result compressed_archive_builder_set_algorithm(CompressedArchiveBuilder* self,
     self->force_algorithm = true;
     printf("Принудительно установлен алгоритм: SHANNON\n");
   }
+  else if (strcmp(algorithm, "rle") == 0 || strcmp(algorithm, "r") == 0)
+  {
+    self->selected_algorithm = COMPRESSION_RLE;
+    self->force_algorithm = true;
+    printf("Принудительно установлен алгоритм: RLE\n");
+  }
   else if (strcmp(algorithm, "none") == 0)
   {
     self->selected_algorithm = COMPRESSION_NONE;
@@ -157,8 +165,12 @@ static Result append_to_buffer(CompressedArchiveBuilder* self, const Byte* data,
   if (self->all_data_size + size > self->all_data_capacity)
   {
     Size new_capacity = self->all_data_capacity * 2;
+
     if (new_capacity < 1024)
+    {
       new_capacity = 1024;
+    }
+
     if (new_capacity < self->all_data_size + size)
     {
       new_capacity = self->all_data_size + size;
@@ -560,6 +572,55 @@ static Result compress_file_data(const char* filename,
                                       &compressed_data->tree_model_size);
     }
   }
+  else if (algorithm == COMPRESSION_RLE)
+  {
+    if (all_data && all_data_size > 0)
+    {
+      // Если передан глобальный контекст RLE, используем его
+      if (compressed_data->rle_context)
+      {
+        result = rle_compress(
+          original_data, original_size, &compressed_data->compressed_data,
+          &compressed_data->compressed_size, compressed_data->rle_context);
+      }
+      else
+      {
+        // Создаем временный контекст на основе данных этого файла
+        Byte prefix = rle_analyze_prefix(original_data, original_size);
+        RLEContext* temp_context = rle_create(prefix);
+        if (temp_context == NULL)
+        {
+          file_close(input_file);
+          file_destroy(input_file);
+          return RESULT_MEMORY_ERROR;
+        }
+
+        result = rle_compress(original_data, original_size,
+                              &compressed_data->compressed_data,
+                              &compressed_data->compressed_size, temp_context);
+
+        rle_destroy(temp_context);
+      }
+    }
+    else
+    {
+      // Без глобальных данных - используем данные файла
+      Byte prefix = rle_analyze_prefix(original_data, original_size);
+      RLEContext* rle_context = rle_create(prefix);
+      if (rle_context == NULL)
+      {
+        file_close(input_file);
+        file_destroy(input_file);
+        return RESULT_MEMORY_ERROR;
+      }
+
+      compressed_data->rle_context = rle_context;
+
+      result = rle_compress(original_data, original_size,
+                            &compressed_data->compressed_data,
+                            &compressed_data->compressed_size, rle_context);
+    }
+  }
   else
   {
     compressed_data->compressed_data = malloc(original_size);
@@ -648,6 +709,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
              selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
              : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
              : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON"
+             : selected_algorithm == COMPRESSION_RLE        ? "RLE"
                                                             : "NONE");
     }
     else
@@ -763,389 +825,126 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         }
       }
     }
-  }
-
-  self->selected_algorithm = selected_algorithm;
-
-  // Шаг 2: Создаем заголовок
-  DWord flags =
-    file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
-
-  if (selected_algorithm == COMPRESSION_HUFFMAN)
-  {
-    flags |= FLAG_COMPRESSED | FLAG_HUFFMAN_TREE;
-  }
-  else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-  {
-    flags |= FLAG_COMPRESSED | FLAG_ARITHMETIC_MODEL;
-  }
-  else if (selected_algorithm == COMPRESSION_SHANNON)
-  {
-    flags |= FLAG_COMPRESSED | FLAG_SHANNON_TREE;
-  }
-
-  CompressedArchiveHeader header;
-  compressed_archive_header_init(
-    &header, file_table_get_total_size(self->file_table), selected_algorithm,
-    COMPRESSION_NONE, ERROR_CORRECTION_NONE, flags);
-
-  if (selected_algorithm == COMPRESSION_HUFFMAN)
-  {
-    header.huffman_tree_size = (DWord)tree_model_size;
-    header.arithmetic_model_size = 0;
-    header.shannon_tree_size = 0;
-  }
-  else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-  {
-    header.huffman_tree_size = 0;
-    header.arithmetic_model_size = (DWord)tree_model_size;
-    header.shannon_tree_size = 0;
-  }
-  else if (selected_algorithm == COMPRESSION_SHANNON)
-  {
-    header.huffman_tree_size = 0;
-    header.arithmetic_model_size = 0;
-    header.shannon_tree_size = (DWord)tree_model_size;
-  }
-  else
-  {
-    header.huffman_tree_size = 0;
-    header.arithmetic_model_size = 0;
-    header.shannon_tree_size = 0;
-  }
-
-  printf("\n=== Создание заголовка ===\n");
-  printf("Алгоритм сжатия: %s\n",
-         selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
-         : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
-         : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON"
-                                                        : "NONE");
-  printf("Флаги: 0x%08X\n", flags);
-  printf("Размер модели/дерева: %u байт\n",
-         selected_algorithm == COMPRESSION_HUFFMAN ? header.huffman_tree_size
-         : selected_algorithm == COMPRESSION_ARITHMETIC
-           ? header.arithmetic_model_size
-         : selected_algorithm == COMPRESSION_SHANNON ? header.shannon_tree_size
-                                                     : 0);
-
-  Result result = compressed_archive_header_write(&header, self->archive_file);
-  if (result != RESULT_OK)
-  {
-    printf("Ошибка записи заголовка архива!\n");
-
-    if (compression_model)
+    else if (selected_algorithm == COMPRESSION_RLE)
     {
-      if (selected_algorithm == COMPRESSION_HUFFMAN)
+      // Создаем общий контекст RLE для всего архива
+      Byte prefix = rle_analyze_prefix(self->all_data, self->all_data_size);
+      RLEContext* rle_context = rle_create(prefix);
+      if (rle_context)
       {
-        huffman_tree_destroy((HuffmanTree*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-      {
-        arithmetic_model_destroy((ArithmeticModel*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_SHANNON)
-      {
-        shannon_tree_destroy((ShannonTree*)compression_model);
-      }
-    }
+        compression_model = rle_context;
 
-    free(tree_model_data);
-    if (self->all_data)
-    {
-      free(self->all_data);
-    }
-    return result;
-  }
-
-  // Шаг 3: Рассчитываем смещения
-  QWord data_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
-  data_offset += sizeof(DWord);  // file_count
-  data_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
-
-  if (tree_model_data)
-  {
-    data_offset += tree_model_size;  // Место для дерева/модели
-  }
-
-  printf("\n=== Расчет смещений ===\n");
-  printf("Смещение после заголовка: %llu байт\n", data_offset);
-
-  // Массив для хранения сжатых данных каждого файла
-  Byte** compressed_files_data = NULL;
-  Size* compressed_files_sizes = NULL;
-
-  if (selected_algorithm != COMPRESSION_NONE &&
-      file_table_get_count(self->file_table) > 0)
-  {
-    compressed_files_data =
-      (Byte**)malloc(sizeof(Byte*) * file_table_get_count(self->file_table));
-    compressed_files_sizes =
-      (Size*)malloc(sizeof(Size) * file_table_get_count(self->file_table));
-
-    if (compressed_files_data == NULL || compressed_files_sizes == NULL)
-    {
-      printf("Произошла ошибка при выделении памяти для сжатых данных!\n");
-      if (compressed_files_data)
-      {
-        free((void*)compressed_files_data);
-      }
-      if (compressed_files_sizes)
-      {
-        free(compressed_files_sizes);
-      }
-      if (compression_model)
-      {
-        if (selected_algorithm == COMPRESSION_HUFFMAN)
+        // Сериализуем контекст
+        Result serialize_result = rle_serialize_context(
+          rle_context, &tree_model_data, &tree_model_size);
+        if (serialize_result != RESULT_OK)
         {
-          huffman_tree_destroy((HuffmanTree*)compression_model);
+          rle_destroy(rle_context);
+          selected_algorithm = COMPRESSION_NONE;
+          tree_model_data = NULL;
+          tree_model_size = 0;
+          printf("[RLE] Ошибка сериализации контекста!\n");
         }
-        else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+        else
         {
-          arithmetic_model_destroy((ArithmeticModel*)compression_model);
-        }
-        else if (selected_algorithm == COMPRESSION_SHANNON)
-        {
-          shannon_tree_destroy((ShannonTree*)compression_model);
-        }
-      }
-
-      free(tree_model_data);
-      if (self->all_data)
-      {
-        free(self->all_data);
-      }
-
-      return RESULT_MEMORY_ERROR;
-    }
-
-    memset((void*)compressed_files_data, 0,
-           sizeof(Byte*) * file_table_get_count(self->file_table));
-    memset(compressed_files_sizes, 0,
-           sizeof(Size) * file_table_get_count(self->file_table));
-  }
-
-  printf("\n=== Сжатие файлов ===\n");
-  bool compression_successful = true;
-
-  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
-  {
-    FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
-    printf("Файл %u/%u: %s\n", i + 1, file_table_get_count(self->file_table),
-           entry->filename);
-
-    if (selected_algorithm != COMPRESSION_NONE)
-    {
-      CompressedFileData compressed_file_data;
-      memset(&compressed_file_data, 0, sizeof(CompressedFileData));
-
-      result =
-        compress_file_data(entry->filename, selected_algorithm, self->all_data,
-                           self->all_data_size, &compressed_file_data);
-
-      if (result == RESULT_OK && compressed_file_data.compressed_data)
-      {
-        printf("  Исходный размер: %llu байт\n", entry->original_size);
-        printf("  Сжатый размер: %zu байт\n",
-               compressed_file_data.compressed_size);
-        printf("  Коэффициент сжатия: %.1f%%\n",
-               (1.0 - (double)compressed_file_data.compressed_size /
-                        (double)entry->original_size) *
-                 100);
-
-        compressed_files_data[i] = compressed_file_data.compressed_data;
-        compressed_files_sizes[i] = compressed_file_data.compressed_size;
-
-        entry->compressed_size = compressed_file_data.compressed_size;
-        entry->offset = data_offset;
-        data_offset += compressed_file_data.compressed_size;
-
-        printf("  Смещение в архиве: %llu байт\n", entry->offset);
-
-        free(compressed_file_data.tree_model_data);
-        if (selected_algorithm == COMPRESSION_HUFFMAN)
-        {
-          if (compressed_file_data.huffman_tree &&
-              compressed_file_data.huffman_tree != compression_model)
-          {
-            huffman_tree_destroy(compressed_file_data.huffman_tree);
-          }
-        }
-        else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-        {
-          if (compressed_file_data.arithmetic_model &&
-              compressed_file_data.arithmetic_model != compression_model)
-          {
-            arithmetic_model_destroy(compressed_file_data.arithmetic_model);
-          }
-        }
-        else if (selected_algorithm == COMPRESSION_SHANNON)
-        {
-          if (compressed_file_data.shannon_tree &&
-              compressed_file_data.shannon_tree != compression_model)
-          {
-            shannon_tree_destroy(compressed_file_data.shannon_tree);
-          }
+          printf("[RLE] Создан общий контекст RLE с префиксом 0x%02X\n",
+                 prefix);
         }
       }
       else
       {
-        printf("  Ошибка сжатия файла!\n");
-        free_compressed_file_data(&compressed_file_data);
-        compression_successful = false;
-        break;
+        selected_algorithm = COMPRESSION_NONE;
+        printf("[RLE] Ошибка создания контекста!\n");
       }
+    }
+
+    self->selected_algorithm = selected_algorithm;
+
+    // Шаг 2: Создаем заголовок
+    DWord flags =
+      file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
+
+    if (selected_algorithm == COMPRESSION_HUFFMAN)
+    {
+      flags |= FLAG_COMPRESSED | FLAG_HUFFMAN_TREE;
+    }
+    else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+    {
+      flags |= FLAG_COMPRESSED | FLAG_ARITHMETIC_MODEL;
+    }
+    else if (selected_algorithm == COMPRESSION_SHANNON)
+    {
+      flags |= FLAG_COMPRESSED | FLAG_SHANNON_TREE;
+    }
+    else if (selected_algorithm == COMPRESSION_RLE)
+    {
+      flags |= FLAG_COMPRESSED | FLAG_RLE_CONTEXT;
+    }
+
+    CompressedArchiveHeader header;
+    compressed_archive_header_init(
+      &header, file_table_get_total_size(self->file_table), selected_algorithm,
+      COMPRESSION_NONE, ERROR_CORRECTION_NONE, flags);
+
+    if (selected_algorithm == COMPRESSION_HUFFMAN)
+    {
+      header.huffman_tree_size = (DWord)tree_model_size;
+      header.arithmetic_model_size = 0;
+      header.shannon_tree_size = 0;
+      header.rle_context_size = 0;
+    }
+    else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+    {
+      header.huffman_tree_size = 0;
+      header.arithmetic_model_size = (DWord)tree_model_size;
+      header.shannon_tree_size = 0;
+      header.rle_context_size = 0;
+    }
+    else if (selected_algorithm == COMPRESSION_SHANNON)
+    {
+      header.huffman_tree_size = 0;
+      header.arithmetic_model_size = 0;
+      header.shannon_tree_size = (DWord)tree_model_size;
+      header.rle_context_size = 0;
+    }
+    else if (selected_algorithm == COMPRESSION_RLE)
+    {
+      header.huffman_tree_size = 0;
+      header.arithmetic_model_size = 0;
+      header.shannon_tree_size = 0;
+      header.rle_context_size = (DWord)tree_model_size;
     }
     else
     {
-      entry->compressed_size = entry->original_size;
-      entry->offset = data_offset;
-      data_offset += entry->original_size;
-      printf("  Используется исходный размер: %llu байт\n",
-             entry->original_size);
-      printf("  Смещение в архиве: %llu байт\n", entry->offset);
-    }
-  }
-
-  if (!compression_successful && selected_algorithm != COMPRESSION_NONE)
-  {
-    printf("\n=== Переход на несжатый режим ===\n");
-
-    if (compressed_files_data)
-    {
-      for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
-      {
-        if (compressed_files_data[i])
-        {
-          free(compressed_files_data[i]);
-        }
-      }
-      free((void*)compressed_files_data);
-      free(compressed_files_sizes);
-      compressed_files_data = NULL;
-      compressed_files_sizes = NULL;
+      header.huffman_tree_size = 0;
+      header.arithmetic_model_size = 0;
+      header.shannon_tree_size = 0;
+      header.rle_context_size = 0;
     }
 
-    if (compression_model)
-    {
-      if (selected_algorithm == COMPRESSION_HUFFMAN)
-      {
-        huffman_tree_destroy((HuffmanTree*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-      {
-        arithmetic_model_destroy((ArithmeticModel*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_SHANNON)
-      {
-        shannon_tree_destroy((ShannonTree*)compression_model);
-      }
-    }
+    printf("\n=== Создание заголовка ===\n");
+    printf("Алгоритм сжатия: %s\n",
+           selected_algorithm == COMPRESSION_HUFFMAN      ? "HUFFMAN"
+           : selected_algorithm == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
+           : selected_algorithm == COMPRESSION_SHANNON    ? "SHANNON"
+           : selected_algorithm == COMPRESSION_RLE        ? "RLE"
+                                                          : "NONE");
+    printf("Флаги: 0x%08X\n", flags);
+    printf("Размер модели/дерева: %u байт\n",
+           selected_algorithm == COMPRESSION_HUFFMAN ? header.huffman_tree_size
+           : selected_algorithm == COMPRESSION_ARITHMETIC
+             ? header.arithmetic_model_size
+           : selected_algorithm == COMPRESSION_SHANNON
+             ? header.shannon_tree_size
+           : selected_algorithm == COMPRESSION_RLE ? header.rle_context_size
+                                                   : 0);
 
-    free(tree_model_data);
-    tree_model_data = NULL;
-    tree_model_size = 0;
-    selected_algorithm = COMPRESSION_NONE;
-
-    flags &= ~(FLAG_COMPRESSED | FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL |
-               FLAG_SHANNON_TREE);
-    flags |=
-      file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
-
-    compressed_archive_header_init(
-      &header, file_table_get_total_size(self->file_table), COMPRESSION_NONE,
-      COMPRESSION_NONE, ERROR_CORRECTION_NONE, flags);
-
-    header.huffman_tree_size = 0;
-    header.arithmetic_model_size = 0;
-    header.shannon_tree_size = 0;
-
-    file_seek(self->archive_file, 0, SEEK_SET);
-    result = compressed_archive_header_write(&header, self->archive_file);
+    Result result =
+      compressed_archive_header_write(&header, self->archive_file);
     if (result != RESULT_OK)
     {
-      printf("Ошибка перезаписи заголовка!\n");
-      if (self->all_data)
-      {
-        free(self->all_data);
-      }
+      printf("Ошибка записи заголовка архива!\n");
 
-      return result;
-    }
-
-    data_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
-    data_offset += sizeof(DWord);
-    data_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
-
-    for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
-    {
-      FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
-      entry->compressed_size = entry->original_size;
-      entry->offset = data_offset;
-      data_offset += entry->original_size;
-    }
-  }
-
-  // Шаг 4: Записываем таблицу файлов
-  printf("\n=== Запись таблицы файлов ===\n");
-  file_seek(self->archive_file, COMPRESSED_ARCHIVE_HEADER_SIZE, SEEK_SET);
-  result = file_table_write(self->file_table, self->archive_file);
-  if (result != RESULT_OK)
-  {
-    printf("Ошибка записи таблицы файлов!\n");
-    if (compression_model)
-    {
-      if (selected_algorithm == COMPRESSION_HUFFMAN)
-      {
-        huffman_tree_destroy((HuffmanTree*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-      {
-        arithmetic_model_destroy((ArithmeticModel*)compression_model);
-      }
-      else if (selected_algorithm == COMPRESSION_SHANNON)
-      {
-        shannon_tree_destroy((ShannonTree*)compression_model);
-      }
-    }
-
-    free(tree_model_data);
-
-    if (compressed_files_data)
-    {
-      for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
-      {
-        if (compressed_files_data[i])
-        {
-          free(compressed_files_data[i]);
-        }
-      }
-      free((void*)compressed_files_data);
-      free(compressed_files_sizes);
-    }
-
-    if (self->all_data)
-    {
-      free(self->all_data);
-    }
-
-    return result;
-  }
-
-  printf("Таблица файлов записана успешно\n");
-
-  // Шаг 5: Записываем дерево/модель сжатия (если есть)
-  if (selected_algorithm != COMPRESSION_NONE && tree_model_data &&
-      tree_model_size > 0)
-  {
-    printf("\n=== Запись модели/дерева сжатия ===\n");
-    printf("Размер модели/дерева: %zu байт\n", tree_model_size);
-
-    result =
-      file_write_bytes(self->archive_file, tree_model_data, tree_model_size);
-    if (result != RESULT_OK)
-    {
-      printf("Ошибка записи модели/дерева!\n");
-      // Освобождаем ресурсы
       if (compression_model)
       {
         if (selected_algorithm == COMPRESSION_HUFFMAN)
@@ -1163,6 +962,255 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       }
 
       free(tree_model_data);
+      if (self->all_data)
+      {
+        free(self->all_data);
+      }
+      return result;
+    }
+
+    // Шаг 3: Рассчитываем смещения
+    QWord data_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
+    data_offset += sizeof(DWord);  // file_count
+    data_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
+
+    if (tree_model_data)
+    {
+      data_offset += tree_model_size;  // Место для дерева/модели
+    }
+
+    printf("\n=== Расчет смещений ===\n");
+    printf("Смещение после заголовка: %llu байт\n", data_offset);
+
+    // Массив для хранения сжатых данных каждого файла
+    Byte** compressed_files_data = NULL;
+    Size* compressed_files_sizes = NULL;
+
+    if (selected_algorithm != COMPRESSION_NONE &&
+        file_table_get_count(self->file_table) > 0)
+    {
+      compressed_files_data =
+        (Byte**)malloc(sizeof(Byte*) * file_table_get_count(self->file_table));
+      compressed_files_sizes =
+        (Size*)malloc(sizeof(Size) * file_table_get_count(self->file_table));
+
+      if (compressed_files_data == NULL || compressed_files_sizes == NULL)
+      {
+        printf("Произошла ошибка при выделении памяти для сжатых данных!\n");
+        if (compressed_files_data)
+        {
+          free((void*)compressed_files_data);
+        }
+        if (compressed_files_sizes)
+        {
+          free(compressed_files_sizes);
+        }
+        if (compression_model)
+        {
+          if (selected_algorithm == COMPRESSION_HUFFMAN)
+          {
+            huffman_tree_destroy((HuffmanTree*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+          {
+            arithmetic_model_destroy((ArithmeticModel*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_SHANNON)
+          {
+            shannon_tree_destroy((ShannonTree*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_RLE)
+          {
+            rle_destroy((RLEContext*)compression_model);
+          }
+        }
+
+        free(tree_model_data);
+        if (self->all_data)
+        {
+          free(self->all_data);
+        }
+
+        return RESULT_MEMORY_ERROR;
+      }
+
+      memset((void*)compressed_files_data, 0,
+             sizeof(Byte*) * file_table_get_count(self->file_table));
+      memset(compressed_files_sizes, 0,
+             sizeof(Size) * file_table_get_count(self->file_table));
+    }
+
+    printf("\n=== Сжатие файлов ===\n");
+    bool compression_successful = true;
+
+    for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+    {
+      FileEntry* entry = (FileEntry*)file_table_get_entry(self->file_table, i);
+      printf("Файл %u/%u: %s\n", i + 1, file_table_get_count(self->file_table),
+             entry->filename);
+
+      if (selected_algorithm == COMPRESSION_RLE)
+      {
+        CompressedFileData compressed_file_data;
+        memset(&compressed_file_data, 0, sizeof(CompressedFileData));
+
+        // Используем общий контекст RLE
+        compressed_file_data.rle_context = (RLEContext*)compression_model;
+        compressed_file_data.algorithm = COMPRESSION_RLE;
+
+        File* input_file = file_create(entry->filename);
+        if (input_file == NULL)
+        {
+          printf("  Ошибка открытия файла для сжатия RLE!\n");
+          compression_successful = false;
+          break;
+        }
+
+        Result open_result = file_open_for_read(input_file);
+        if (open_result != RESULT_OK)
+        {
+          file_destroy(input_file);
+          printf("  Ошибка открытия файла для чтения!\n");
+          compression_successful = false;
+          break;
+        }
+
+        Result read_result = file_read_bytes(input_file);
+        if (read_result != RESULT_OK)
+        {
+          file_close(input_file);
+          file_destroy(input_file);
+          printf("  Ошибка чтения файла!\n");
+          compression_successful = false;
+          break;
+        }
+
+        const Byte* original_data = file_get_buffer(input_file);
+        Size original_size = file_get_size(input_file);
+
+        // Сжимаем с использованием общего контекста
+        result = rle_compress(original_data, original_size,
+                              &compressed_file_data.compressed_data,
+                              &compressed_file_data.compressed_size,
+                              (RLEContext*)compression_model);
+
+        file_close(input_file);
+        file_destroy(input_file);
+
+        if (result == RESULT_OK && compressed_file_data.compressed_data)
+        {
+          printf("  Исходный размер: %llu байт\n", entry->original_size);
+          printf("  Сжатый размер: %zu байт\n",
+                 compressed_file_data.compressed_size);
+          printf("  Коэффициент сжатия: %.1f%%\n",
+                 (1.0 - (double)compressed_file_data.compressed_size /
+                          (double)entry->original_size) *
+                   100);
+
+          compressed_files_data[i] = compressed_file_data.compressed_data;
+          compressed_files_sizes[i] = compressed_file_data.compressed_size;
+
+          entry->compressed_size = compressed_file_data.compressed_size;
+          entry->offset = data_offset;
+          data_offset += compressed_file_data.compressed_size;
+
+          printf("  Смещение в архиве: %llu байт\n", entry->offset);
+
+          // Не освобождаем rle_context, так как он общий
+          // Не вызываем free_compressed_file_data для rle_context
+        }
+        else
+        {
+          printf("  Ошибка сжатия RLE файла!\n");
+          free(compressed_file_data.compressed_data);
+          compression_successful = false;
+          break;
+        }
+      }
+      else if (selected_algorithm != COMPRESSION_NONE)
+      {
+        CompressedFileData compressed_file_data;
+        memset(&compressed_file_data, 0, sizeof(CompressedFileData));
+
+        result = compress_file_data(entry->filename, selected_algorithm,
+                                    self->all_data, self->all_data_size,
+                                    &compressed_file_data);
+
+        if (result == RESULT_OK && compressed_file_data.compressed_data)
+        {
+          printf("  Исходный размер: %llu байт\n", entry->original_size);
+          printf("  Сжатый размер: %zu байт\n",
+                 compressed_file_data.compressed_size);
+          printf("  Коэффициент сжатия: %.1f%%\n",
+                 (1.0 - (double)compressed_file_data.compressed_size /
+                          (double)entry->original_size) *
+                   100);
+
+          compressed_files_data[i] = compressed_file_data.compressed_data;
+          compressed_files_sizes[i] = compressed_file_data.compressed_size;
+
+          entry->compressed_size = compressed_file_data.compressed_size;
+          entry->offset = data_offset;
+          data_offset += compressed_file_data.compressed_size;
+
+          printf("  Смещение в архиве: %llu байт\n", entry->offset);
+
+          free(compressed_file_data.tree_model_data);
+          if (selected_algorithm == COMPRESSION_HUFFMAN)
+          {
+            if (compressed_file_data.huffman_tree &&
+                compressed_file_data.huffman_tree != compression_model)
+            {
+              huffman_tree_destroy(compressed_file_data.huffman_tree);
+            }
+          }
+          else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+          {
+            if (compressed_file_data.arithmetic_model &&
+                compressed_file_data.arithmetic_model != compression_model)
+            {
+              arithmetic_model_destroy(compressed_file_data.arithmetic_model);
+            }
+          }
+          else if (selected_algorithm == COMPRESSION_SHANNON)
+          {
+            if (compressed_file_data.shannon_tree &&
+                compressed_file_data.shannon_tree != compression_model)
+            {
+              shannon_tree_destroy(compressed_file_data.shannon_tree);
+            }
+          }
+          else if (selected_algorithm == COMPRESSION_RLE)
+          {
+            if (compressed_file_data.rle_context)
+            {
+              rle_destroy(compressed_file_data.rle_context);
+            }
+          }
+        }
+        else
+        {
+          printf("  Ошибка сжатия файла!\n");
+          free_compressed_file_data(&compressed_file_data);
+          compression_successful = false;
+          break;
+        }
+      }
+      else
+      {
+        entry->compressed_size = entry->original_size;
+        entry->offset = data_offset;
+        data_offset += entry->original_size;
+        printf("  Используется исходный размер: %llu байт\n",
+               entry->original_size);
+        printf("  Смещение в архиве: %llu байт\n", entry->offset);
+      }
+    }
+
+    if (!compression_successful && selected_algorithm != COMPRESSION_NONE)
+    {
+      printf("\n=== Переход на несжатый режим ===\n");
+
       if (compressed_files_data)
       {
         for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
@@ -1172,7 +1220,116 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
             free(compressed_files_data[i]);
           }
         }
+        free((void*)compressed_files_data);
+        free(compressed_files_sizes);
+        compressed_files_data = NULL;
+        compressed_files_sizes = NULL;
+      }
 
+      if (compression_model)
+      {
+        if (selected_algorithm == COMPRESSION_HUFFMAN)
+        {
+          huffman_tree_destroy((HuffmanTree*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+        {
+          arithmetic_model_destroy((ArithmeticModel*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_SHANNON)
+        {
+          shannon_tree_destroy((ShannonTree*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_RLE)
+        {
+          rle_destroy((RLEContext*)compression_model);
+        }
+      }
+
+      free(tree_model_data);
+      tree_model_data = NULL;
+      tree_model_size = 0;
+      selected_algorithm = COMPRESSION_NONE;
+
+      flags &= ~(FLAG_COMPRESSED | FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL |
+                 FLAG_SHANNON_TREE | FLAG_RLE_CONTEXT);
+      flags |=
+        file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
+
+      compressed_archive_header_init(
+        &header, file_table_get_total_size(self->file_table), COMPRESSION_NONE,
+        COMPRESSION_NONE, ERROR_CORRECTION_NONE, flags);
+
+      header.huffman_tree_size = 0;
+      header.arithmetic_model_size = 0;
+      header.shannon_tree_size = 0;
+      header.rle_context_size = 0;
+
+      file_seek(self->archive_file, 0, SEEK_SET);
+      result = compressed_archive_header_write(&header, self->archive_file);
+      if (result != RESULT_OK)
+      {
+        printf("Ошибка перезаписи заголовка!\n");
+        if (self->all_data)
+        {
+          free(self->all_data);
+        }
+
+        return result;
+      }
+
+      data_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
+      data_offset += sizeof(DWord);
+      data_offset += file_table_get_count(self->file_table) * sizeof(FileEntry);
+
+      for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+      {
+        FileEntry* entry =
+          (FileEntry*)file_table_get_entry(self->file_table, i);
+        entry->compressed_size = entry->original_size;
+        entry->offset = data_offset;
+        data_offset += entry->original_size;
+      }
+    }
+
+    // Шаг 4: Записываем таблицу файлов
+    printf("\n=== Запись таблицы файлов ===\n");
+    file_seek(self->archive_file, COMPRESSED_ARCHIVE_HEADER_SIZE, SEEK_SET);
+    result = file_table_write(self->file_table, self->archive_file);
+    if (result != RESULT_OK)
+    {
+      printf("Ошибка записи таблицы файлов!\n");
+      if (compression_model)
+      {
+        if (selected_algorithm == COMPRESSION_HUFFMAN)
+        {
+          huffman_tree_destroy((HuffmanTree*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+        {
+          arithmetic_model_destroy((ArithmeticModel*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_SHANNON)
+        {
+          shannon_tree_destroy((ShannonTree*)compression_model);
+        }
+        else if (selected_algorithm == COMPRESSION_RLE)
+        {
+          rle_destroy((RLEContext*)compression_model);
+        }
+      }
+
+      free(tree_model_data);
+
+      if (compressed_files_data)
+      {
+        for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+        {
+          if (compressed_files_data[i])
+          {
+            free(compressed_files_data[i]);
+          }
+        }
         free((void*)compressed_files_data);
         free(compressed_files_sizes);
       }
@@ -1185,118 +1342,234 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       return result;
     }
 
-    printf("Модель/дерево записано успешно\n");
-  }
+    printf("Таблица файлов записана успешно\n");
 
-  // Шаг 6: Записываем данные файлов
-  printf("\n=== Запись данных файлов ===\n");
-  for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
-  {
-    const FileEntry* entry = file_table_get_entry(self->file_table, i);
-    printf("Файл %u/%u: %s ", i + 1, file_table_get_count(self->file_table),
-           entry->filename);
-
-    if (selected_algorithm != COMPRESSION_NONE && compressed_files_data &&
-        compressed_files_data[i])
+    // Шаг 5: Записываем дерево/модель сжатия (если есть)
+    if (selected_algorithm != COMPRESSION_NONE && tree_model_data &&
+        tree_model_size > 0)
     {
-      printf("(сжатый, %zu -> %llu байт)\n", compressed_files_sizes[i],
-             entry->original_size);
+      printf("\n=== Запись модели/дерева сжатия ===\n");
+      printf("Размер модели/дерева: %zu байт\n", tree_model_size);
 
-      result = file_write_bytes(self->archive_file, compressed_files_data[i],
-                                compressed_files_sizes[i]);
+      result =
+        file_write_bytes(self->archive_file, tree_model_data, tree_model_size);
       if (result != RESULT_OK)
       {
-        printf("Ошибка записи сжатых данных файла!\n");
+        printf("Ошибка записи модели/дерева!\n");
+        // Освобождаем ресурсы
+        if (compression_model)
+        {
+          if (selected_algorithm == COMPRESSION_HUFFMAN)
+          {
+            huffman_tree_destroy((HuffmanTree*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+          {
+            arithmetic_model_destroy((ArithmeticModel*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_SHANNON)
+          {
+            shannon_tree_destroy((ShannonTree*)compression_model);
+          }
+          else if (selected_algorithm == COMPRESSION_RLE)
+          {
+            rle_destroy((RLEContext*)compression_model);
+          }
+        }
+
+        free(tree_model_data);
+        if (compressed_files_data)
+        {
+          for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+          {
+            if (compressed_files_data[i])
+            {
+              free(compressed_files_data[i]);
+            }
+          }
+
+          free((void*)compressed_files_data);
+          free(compressed_files_sizes);
+        }
+
+        if (self->all_data)
+        {
+          free(self->all_data);
+        }
+
+        return result;
+      }
+
+      printf("Модель/дерево записано успешно\n");
+    }
+
+    // Шаг 6: Записываем данные файлов
+    printf("\n=== Запись данных файлов ===\n");
+    for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+    {
+      const FileEntry* entry = file_table_get_entry(self->file_table, i);
+      printf("Файл %u/%u: %s ", i + 1, file_table_get_count(self->file_table),
+             entry->filename);
+
+      if (selected_algorithm != COMPRESSION_NONE && compressed_files_data &&
+          compressed_files_data[i])
+      {
+        printf("(сжатый, %zu -> %llu байт)\n", compressed_files_sizes[i],
+               entry->original_size);
+
+        result = file_write_bytes(self->archive_file, compressed_files_data[i],
+                                  compressed_files_sizes[i]);
+        if (result != RESULT_OK)
+        {
+          printf("Ошибка записи сжатых данных файла!\n");
+          break;
+        }
+      }
+      else
+      {
+        printf("(несжатый, %llu байт)\n", entry->original_size);
+
+        result = write_file_data(self->archive_file, entry->filename);
+        if (result != RESULT_OK)
+        {
+          printf("Ошибка записи данных файла!\n");
+          break;
+        }
+      }
+
+      if (result != RESULT_OK)
+      {
         break;
       }
     }
-    else
-    {
-      printf("(несжатый, %llu байт)\n", entry->original_size);
 
-      result = write_file_data(self->archive_file, entry->filename);
-      if (result != RESULT_OK)
+    printf("\n=== Очистка ресурсов ===\n");
+    if (compression_model)
+    {
+      if (selected_algorithm == COMPRESSION_HUFFMAN)
       {
-        printf("Ошибка записи данных файла!\n");
-        break;
+        huffman_tree_destroy((HuffmanTree*)compression_model);
       }
+      else if (selected_algorithm == COMPRESSION_ARITHMETIC)
+      {
+        arithmetic_model_destroy((ArithmeticModel*)compression_model);
+      }
+      else if (selected_algorithm == COMPRESSION_SHANNON)
+      {
+        shannon_tree_destroy((ShannonTree*)compression_model);
+      }
+      else if (selected_algorithm == COMPRESSION_RLE)
+      {
+        rle_destroy((RLEContext*)compression_model);
+      }
+    }
+
+    free(tree_model_data);
+
+    if (compressed_files_data)
+    {
+      for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
+      {
+        if (compressed_files_data[i])
+        {
+          free(compressed_files_data[i]);
+        }
+      }
+      free((void*)compressed_files_data);
+      free(compressed_files_sizes);
+    }
+
+    if (self->all_data)
+    {
+      free(self->all_data);
+      self->all_data = NULL;
+      self->all_data_size = 0;
+      self->all_data_capacity = 0;
     }
 
     if (result != RESULT_OK)
     {
-      break;
+      printf("\nОшибка при создании архива!\n");
+      return result;
     }
+
+    printf("\nАрхив успешно создан!\n");
+    printf("Режим: %s\n",
+           selected_algorithm == COMPRESSION_HUFFMAN ? "СЖАТЫЙ (Huffman)"
+           : selected_algorithm == COMPRESSION_ARITHMETIC
+             ? "СЖАТЫЙ (Arithmetic)"
+           : selected_algorithm == COMPRESSION_SHANNON ? "СЖАТЫЙ (Shannon)"
+           : selected_algorithm == COMPRESSION_RLE     ? "СЖАТЫЙ (RLE)"
+                                                       : "НЕСЖАТЫЙ");
+    printf("Файлов в архиве: %u\n", file_table_get_count(self->file_table));
+
+    file_seek(self->archive_file, 0, SEEK_END);
+    long archive_size = file_tell(self->archive_file);
+    printf("Размер архива: %ld байт\n", archive_size);
+
+    if (selected_algorithm != COMPRESSION_NONE)
+    {
+      printf("\n=== Общий анализ архива ===\n");
+      printf("Общий исходный размер: %llu байт\n",
+             file_table_get_total_size(self->file_table));
+      printf("Общий сжатый размер: %ld байт\n", archive_size);
+      printf("Общий коэффициент сжатия: %.2f%%\n",
+             (1.0 - (double)archive_size /
+                      (double)file_table_get_total_size(self->file_table)) *
+               100);
+    }
+
+    return RESULT_OK;
   }
-
-  printf("\n=== Очистка ресурсов ===\n");
-  if (compression_model)
+  else
   {
-    if (selected_algorithm == COMPRESSION_HUFFMAN)
-    {
-      huffman_tree_destroy((HuffmanTree*)compression_model);
-    }
-    else if (selected_algorithm == COMPRESSION_ARITHMETIC)
-    {
-      arithmetic_model_destroy((ArithmeticModel*)compression_model);
-    }
-    else if (selected_algorithm == COMPRESSION_SHANNON)
-    {
-      shannon_tree_destroy((ShannonTree*)compression_model);
-    }
-  }
+    printf("Нет данных для анализа. Создание несжатого архива.\n");
 
-  free(tree_model_data);
+    // Создаем заголовок для несжатого архива
+    DWord flags =
+      file_table_get_count(self->file_table) > 1 ? FLAG_DIRECTORY : FLAG_NONE;
 
-  if (compressed_files_data)
-  {
+    CompressedArchiveHeader header;
+    compressed_archive_header_init(
+      &header, file_table_get_total_size(self->file_table), COMPRESSION_NONE,
+      COMPRESSION_NONE, ERROR_CORRECTION_NONE, flags);
+
+    Result result =
+      compressed_archive_header_write(&header, self->archive_file);
+    if (result != RESULT_OK)
+    {
+      printf("Ошибка записи заголовка архива!\n");
+      return result;
+    }
+
+    // Записываем таблицу файлов
+    file_seek(self->archive_file, COMPRESSED_ARCHIVE_HEADER_SIZE, SEEK_SET);
+    result = file_table_write(self->file_table, self->archive_file);
+    if (result != RESULT_OK)
+    {
+      printf("Ошибка записи таблицы файлов!\n");
+      return result;
+    }
+
+    // Записываем данные файлов
     for (DWord i = 0; i < file_table_get_count(self->file_table); i++)
     {
-      if (compressed_files_data[i])
+      const FileEntry* entry = file_table_get_entry(self->file_table, i);
+      result = write_file_data(self->archive_file, entry->filename);
+      if (result != RESULT_OK)
       {
-        free(compressed_files_data[i]);
+        printf("Ошибка записи данных файла: %s\n", entry->filename);
+        return result;
       }
     }
-    free((void*)compressed_files_data);
-    free(compressed_files_sizes);
+
+    printf("\nНесжатый архив успешно создан!\n");
+    printf("Файлов в архиве: %u\n", file_table_get_count(self->file_table));
+
+    file_seek(self->archive_file, 0, SEEK_END);
+    long archive_size = file_tell(self->archive_file);
+    printf("Размер архива: %ld байт\n", archive_size);
+
+    return RESULT_OK;
   }
-
-  if (self->all_data)
-  {
-    free(self->all_data);
-    self->all_data = NULL;
-    self->all_data_size = 0;
-    self->all_data_capacity = 0;
-  }
-
-  if (result != RESULT_OK)
-  {
-    printf("\nОшибка при создании архива!\n");
-    return result;
-  }
-
-  printf("\nАрхив успешно создан!\n");
-  printf("Режим: %s\n",
-         selected_algorithm == COMPRESSION_HUFFMAN      ? "СЖАТЫЙ (Huffman)"
-         : selected_algorithm == COMPRESSION_ARITHMETIC ? "СЖАТЫЙ (Arithmetic)"
-         : selected_algorithm == COMPRESSION_SHANNON    ? "СЖАТЫЙ (Shannon)"
-                                                        : "НЕСЖАТЫЙ");
-  printf("Файлов в архиве: %u\n", file_table_get_count(self->file_table));
-
-  file_seek(self->archive_file, 0, SEEK_END);
-  long archive_size = file_tell(self->archive_file);
-  printf("Размер архива: %ld байт\n", archive_size);
-
-  if (selected_algorithm != COMPRESSION_NONE)
-  {
-    printf("\n=== Общий анализ архива ===\n");
-    printf("Общий исходный размер: %llu байт\n",
-           file_table_get_total_size(self->file_table));
-    printf("Общий сжатый размер: %ld байт\n", archive_size);
-    printf("Общий коэффициент сжатия: %.2f%%\n",
-           (1.0 - (double)archive_size /
-                    (double)file_table_get_total_size(self->file_table)) *
-             100);
-  }
-
-  return RESULT_OK;
 }

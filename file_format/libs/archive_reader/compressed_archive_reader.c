@@ -10,6 +10,7 @@
 #include "file_table.h"
 #include "huffman.h"
 #include "path_utils.h"
+#include "rle.h"
 #include "shannon.h"
 
 #define PATH_LIMIT 4096
@@ -23,6 +24,7 @@ struct CompressedArchiveReader
   ArithmeticModel*
     arithmetic_model;         // Арифметическая модель (если используется)
   ShannonTree* shannon_tree;  // Дерево Шеннона (если используется)
+  RLEContext* rle_context;    // Контекст RLE (если используется)
 };
 
 CompressedArchiveReader* compressed_archive_reader_create(
@@ -61,6 +63,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   reader->huffman_tree = NULL;
   reader->arithmetic_model = NULL;
   reader->shannon_tree = NULL;
+  reader->rle_context = NULL;
 
   printf("\n=== Открытие архива для чтения ===\n");
   printf("Файл: %s\n", input_filename);
@@ -91,6 +94,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   printf("Размер арифметической модели: %u байт\n",
          reader->header.arithmetic_model_size);
   printf("Размер дерева Шеннона: %u байт\n", reader->header.shannon_tree_size);
+  printf("Размер контекста RLE: %u байт\n", reader->header.rle_context_size);
 
   if (!compressed_archive_header_is_valid(&reader->header))
   {
@@ -117,11 +121,12 @@ CompressedArchiveReader* compressed_archive_reader_create(
            entry->offset);
   }
 
-  if ((reader->header.flags &
-       (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL | FLAG_SHANNON_TREE)) &&
+  if ((reader->header.flags & (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL |
+                               FLAG_SHANNON_TREE | FLAG_RLE_CONTEXT)) &&
       (reader->header.huffman_tree_size > 0 ||
        reader->header.arithmetic_model_size > 0 ||
-       reader->header.shannon_tree_size > 0))
+       reader->header.shannon_tree_size > 0 ||
+       reader->header.rle_context_size > 0))
   {
     QWord model_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
     model_offset += sizeof(DWord);  // file_count
@@ -285,6 +290,58 @@ CompressedArchiveReader* compressed_archive_reader_create(
 
       printf("Дерево Шеннона десериализовано успешно\n");
     }
+    else if ((reader->header.flags & FLAG_RLE_CONTEXT) &&
+             reader->header.rle_context_size > 0 &&
+             reader->header.primary_compression == COMPRESSION_RLE)
+    {
+      printf("\n=== Чтение контекста RLE ===\n");
+      printf("Смещение контекста: %llu байт\n", model_offset);
+      printf("Размер контекста: %u байт\n", reader->header.rle_context_size);
+
+      model_size = reader->header.rle_context_size;
+      model_data = (Byte*)malloc(model_size * sizeof(Byte));
+      if (model_data == NULL)
+      {
+        printf("Произошла ошибка выделения памяти!\n");
+        goto error;
+      }
+
+      result = file_read_at(reader->archive_file, model_data, model_size,
+                            model_offset);
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при чтении контекста RLE!\n");
+        free(model_data);
+        goto error;
+      }
+
+      printf("Контекст прочитан успешно\n");
+
+      reader->rle_context = rle_create(0);  // Создаем с временным префиксом
+
+      if (reader->rle_context == NULL)
+      {
+        printf("Произошла ошибка при создании контекста RLE!\n");
+        free(model_data);
+        goto error;
+      }
+
+      result =
+        rle_deserialize_context(reader->rle_context, model_data, model_size);
+
+      free(model_data);
+
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при десериализации контекста RLE!\n");
+        rle_destroy(reader->rle_context);
+        reader->rle_context = NULL;
+        goto error;
+      }
+
+      printf("Контекст RLE десериализован успешно\n");
+      printf("Префикс RLE: 0x%02X\n", rle_get_prefix(reader->rle_context));
+    }
   }
   else
   {
@@ -318,6 +375,11 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
   if (self->shannon_tree)
   {
     shannon_tree_destroy(self->shannon_tree);
+  }
+
+  if (self->rle_context)
+  {
+    rle_destroy(self->rle_context);
   }
 
   file_table_destroy(self->file_table);
@@ -372,9 +434,9 @@ static Result extract_single_file(CompressedArchiveReader* self,
            self->header.primary_compression == COMPRESSION_HUFFMAN ? "HUFFMAN"
            : self->header.primary_compression == COMPRESSION_ARITHMETIC
              ? "ARITHMETIC"
-           : self->header.primary_compression == COMPRESSION_SHANNON
-             ? "SHANNON"
-             : "UNKNOWN");
+           : self->header.primary_compression == COMPRESSION_SHANNON ? "SHANNON"
+           : self->header.primary_compression == COMPRESSION_RLE     ? "RLE"
+                                                                 : "UNKNOWN");
 
     final_data = malloc(entry->original_size);
     if (final_data == NULL)
@@ -418,6 +480,17 @@ static Result extract_single_file(CompressedArchiveReader* self,
       result =
         shannon_decompress(file_data, entry->compressed_size, &final_data,
                            &expected_size, self->shannon_tree);
+    }
+    else if (self->header.primary_compression == COMPRESSION_RLE &&
+             self->rle_context != NULL)
+    {
+      printf("Декомпрессия методом RLE...\n");
+      printf("  Входные данные: %llu байт\n", entry->compressed_size);
+      printf("  Ожидаемый размер: %llu байт\n", entry->original_size);
+      printf("  Префикс RLE: 0x%02X\n", rle_get_prefix(self->rle_context));
+
+      result = rle_decompress(file_data, entry->compressed_size, &final_data,
+                              &expected_size, self->rle_context);
     }
     else
     {
