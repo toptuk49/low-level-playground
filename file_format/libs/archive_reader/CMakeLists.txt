@@ -5,8 +5,9 @@ target_link_libraries(archive_reader PUBLIC
     archive_header
     arithmetic
     file_table
-    path_utils
     huffman
+    lz78
+    path_utils
     rle
     shannon
 )

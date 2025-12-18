@@ -9,6 +9,7 @@
 #include "compressed_archive_header.h"
 #include "file_table.h"
 #include "huffman.h"
+#include "lz78.h"
 #include "path_utils.h"
 #include "rle.h"
 #include "shannon.h"
@@ -25,6 +26,7 @@ struct CompressedArchiveReader
     arithmetic_model;         // Арифметическая модель (если используется)
   ShannonTree* shannon_tree;  // Дерево Шеннона (если используется)
   RLEContext* rle_context;    // Контекст RLE (если используется)
+  LZ78Context* lz78_context;  // Контекст LZ78 (если используется)
 };
 
 CompressedArchiveReader* compressed_archive_reader_create(
@@ -64,6 +66,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   reader->arithmetic_model = NULL;
   reader->shannon_tree = NULL;
   reader->rle_context = NULL;
+  reader->lz78_context = NULL;
 
   printf("\n=== Открытие архива для чтения ===\n");
   printf("Файл: %s\n", input_filename);
@@ -95,6 +98,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
          reader->header.arithmetic_model_size);
   printf("Размер дерева Шеннона: %u байт\n", reader->header.shannon_tree_size);
   printf("Размер контекста RLE: %u байт\n", reader->header.rle_context_size);
+  printf("Размер контекста LZ78: %u байт\n", reader->header.lz78_context_size);
 
   if (!compressed_archive_header_is_valid(&reader->header))
   {
@@ -121,12 +125,14 @@ CompressedArchiveReader* compressed_archive_reader_create(
            entry->offset);
   }
 
-  if ((reader->header.flags & (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL |
-                               FLAG_SHANNON_TREE | FLAG_RLE_CONTEXT)) &&
+  if ((reader->header.flags &
+       (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL | FLAG_SHANNON_TREE |
+        FLAG_RLE_CONTEXT | FLAG_LZ78_CONTEXT)) &&
       (reader->header.huffman_tree_size > 0 ||
        reader->header.arithmetic_model_size > 0 ||
        reader->header.shannon_tree_size > 0 ||
-       reader->header.rle_context_size > 0))
+       reader->header.rle_context_size > 0 ||
+       reader->header.lz78_context_size > 0))
   {
     QWord model_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
     model_offset += sizeof(DWord);  // file_count
@@ -342,6 +348,45 @@ CompressedArchiveReader* compressed_archive_reader_create(
       printf("Контекст RLE десериализован успешно\n");
       printf("Префикс RLE: 0x%02X\n", rle_get_prefix(reader->rle_context));
     }
+    else if ((reader->header.flags & FLAG_LZ78_CONTEXT) &&
+             reader->header.lz78_context_size > 0 &&
+             reader->header.primary_compression == COMPRESSION_LZ78)
+    {
+      printf("\n=== Чтение контекста LZ78 ===\n");
+      printf("Смещение контекста: %llu байт\n", model_offset);
+      printf("Размер контекста: %u байт\n", reader->header.lz78_context_size);
+
+      // LZ78 не имеет сериализуемого контекста, пропускаем данные
+      model_size = reader->header.lz78_context_size;
+      model_data = (Byte*)malloc(model_size * sizeof(Byte));
+      if (model_data == NULL)
+      {
+        printf("Произошла ошибка выделения памяти!\n");
+        goto error;
+      }
+
+      result = file_read_at(reader->archive_file, model_data, model_size,
+                            model_offset);
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при чтении контекста LZ78!\n");
+        free(model_data);
+        goto error;
+      }
+
+      // LZ78 не требует десериализации контекста, но создаем пустой контекст
+      // для единообразия
+      reader->lz78_context = lz78_create();
+      if (reader->lz78_context == NULL)
+      {
+        printf("Произошла ошибка при создании контекста LZ78!\n");
+        free(model_data);
+        goto error;
+      }
+
+      free(model_data);
+      printf("Контекст LZ78 создан (LZ78 не требует сериализации контекста)\n");
+    }
   }
   else
   {
@@ -380,6 +425,11 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
   if (self->rle_context)
   {
     rle_destroy(self->rle_context);
+  }
+
+  if (self->lz78_context)
+  {
+    lz78_destroy(self->lz78_context);
   }
 
   file_table_destroy(self->file_table);
@@ -436,7 +486,8 @@ static Result extract_single_file(CompressedArchiveReader* self,
              ? "ARITHMETIC"
            : self->header.primary_compression == COMPRESSION_SHANNON ? "SHANNON"
            : self->header.primary_compression == COMPRESSION_RLE     ? "RLE"
-                                                                 : "UNKNOWN");
+           : self->header.primary_compression == COMPRESSION_LZ78    ? "LZ78"
+                                                                  : "UNKNOWN");
 
     final_data = malloc(entry->original_size);
     if (final_data == NULL)
@@ -491,6 +542,15 @@ static Result extract_single_file(CompressedArchiveReader* self,
 
       result = rle_decompress(file_data, entry->compressed_size, &final_data,
                               &expected_size, self->rle_context);
+    }
+    else if (self->header.primary_compression == COMPRESSION_LZ78)
+    {
+      printf("Декомпрессия методом LZ78...\n");
+      printf("  Входные данные: %llu байт\n", entry->compressed_size);
+      printf("  Ожидаемый размер: %llu байт\n", entry->original_size);
+
+      result = lz78_decompress(file_data, entry->compressed_size, &final_data,
+                               &expected_size);
     }
     else
     {
