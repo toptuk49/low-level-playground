@@ -10,6 +10,10 @@ CompressedArchiveBuilder* compressed_archive_builder_create(
 
 Result compressed_archive_builder_set_algorithm(CompressedArchiveBuilder* self,
                                                 const char* algorithm);
+Result compressed_archive_builder_set_secondary_algorithm(
+  CompressedArchiveBuilder* self, const char* algorithm);
+Result compressed_archive_builder_set_two_staged(CompressedArchiveBuilder* self,
+                                                 bool enabled);
 
 void compressed_archive_builder_destroy(CompressedArchiveBuilder* self);
 

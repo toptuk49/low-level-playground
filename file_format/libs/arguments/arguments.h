@@ -13,5 +13,8 @@ const char* program_arguments_get_mode(const ProgramArguments* self);
 const char* program_arguments_get_input(const ProgramArguments* self);
 const char* program_arguments_get_output(const ProgramArguments* self);
 const char* program_arguments_get_algorithm(const ProgramArguments* self);
+const char* program_arguments_get_secondary_algorithm(
+  const ProgramArguments* self);
+bool program_arguments_get_two_staged(const ProgramArguments* self);
 
 #endif  // ARGUMENTS_ARGUMENTS_H

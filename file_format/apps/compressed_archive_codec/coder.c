@@ -9,7 +9,9 @@
 
 Result compressed_archive_encode_extended(const char* input_path,
                                           const char* output_filename,
-                                          const char* algorithm)
+                                          const char* algorithm,
+                                          const char* secondary_algorithm,
+                                          bool two_staged)
 {
   if (input_path == NULL || output_filename == NULL)
   {
@@ -32,7 +34,29 @@ Result compressed_archive_encode_extended(const char* input_path,
       compressed_archive_builder_set_algorithm(builder, algorithm);
     if (alg_result != RESULT_OK)
     {
-      printf("Предупреждение: не удалось установить алгоритм %s\n", algorithm);
+      printf("Предупреждение: не удалось установить основной алгоритм %s\n",
+             algorithm);
+    }
+  }
+
+  if (secondary_algorithm != NULL && strlen(secondary_algorithm) > 0)
+  {
+    Result sec_alg_result = compressed_archive_builder_set_secondary_algorithm(
+      builder, secondary_algorithm);
+    if (sec_alg_result != RESULT_OK)
+    {
+      printf("Предупреждение: не удалось установить вторичный алгоритм %s\n",
+             secondary_algorithm);
+    }
+  }
+
+  if (two_staged)
+  {
+    Result two_staged_result =
+      compressed_archive_builder_set_two_staged(builder, true);
+    if (two_staged_result != RESULT_OK)
+    {
+      printf("Предупреждение: не удалось включить двухэтапное сжатие\n");
     }
   }
 
@@ -73,5 +97,6 @@ Result compressed_archive_encode_extended(const char* input_path,
 Result compressed_archive_encode(const char* input_path,
                                  const char* output_filename)
 {
-  return compressed_archive_encode_extended(input_path, output_filename, NULL);
+  return compressed_archive_encode_extended(input_path, output_filename, NULL,
+                                            NULL, false);
 }

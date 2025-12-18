@@ -9,7 +9,8 @@
 #define COMPRESSED_ARCHIVE_SIGNATURE "lolkek"
 #define COMPRESSED_ARCHIVE_SIGNATURE_SIZE 6
 #define COMPRESSED_ARCHIVE_VERSION_MAJOR 2
-#define COMPRESSED_ARCHIVE_VERSION_MINOR 0
+#define COMPRESSED_ARCHIVE_VERSION_MINOR \
+  1  // Увеличили для поддержки двухэтапного сжатия
 
 typedef enum
 {
@@ -31,16 +32,17 @@ typedef enum
 typedef enum
 {
   FLAG_NONE = 0,
-  FLAG_DIRECTORY = 1 << 0,         // Архив содержит папки
-  FLAG_COMPRESSED = 1 << 1,        // Данные сжаты
-  FLAG_ENCRYPTED = 1 << 2,         // Данные зашифрованы
-  FLAG_METADATA = 1 << 3,          // Содержит метаданные
-  FLAG_HUFFMAN_TREE = 1 << 4,      // Содержит дерево Хаффмана
-  FLAG_ARITHMETIC_MODEL = 1 << 5,  // Содержит арифметическую модель
-  FLAG_SHANNON_TREE = 1 << 6,      // Содержит дерево Шеннона-Фано
-  FLAG_RLE_CONTEXT = 1 << 7,       // Содержит контекст RLE
-  FLAG_LZ78_CONTEXT = 1 << 8,      // Содержит контекст LZ78
-  FLAG_LZ77_CONTEXT = 1 << 9,      // Содержит контекст LZ77
+  FLAG_DIRECTORY = 1 << 0,               // Архив содержит папки
+  FLAG_COMPRESSED = 1 << 1,              // Данные сжаты
+  FLAG_ENCRYPTED = 1 << 2,               // Данные зашифрованы
+  FLAG_METADATA = 1 << 3,                // Содержит метаданные
+  FLAG_HUFFMAN_TREE = 1 << 4,            // Содержит дерево Хаффмана
+  FLAG_ARITHMETIC_MODEL = 1 << 5,        // Содержит арифметическую модель
+  FLAG_SHANNON_TREE = 1 << 6,            // Содержит дерево Шеннона-Фано
+  FLAG_RLE_CONTEXT = 1 << 7,             // Содержит контекст RLE
+  FLAG_LZ78_CONTEXT = 1 << 8,            // Содержит контекст LZ78
+  FLAG_LZ77_CONTEXT = 1 << 9,            // Содержит контекст LZ77
+  FLAG_TWO_STAGE_COMPRESSION = 1 << 10,  // Используется двухэтапное сжатие
 } CompressedArchiveFlags;
 
 typedef struct
@@ -53,20 +55,27 @@ typedef struct
 
   // Алгоритмы
   Byte primary_compression;
-  Byte secondary_compression;
+  Byte secondary_compression;  // Для двухэтапного сжатия
   Byte error_correction;
 
   // Флаги и служебные данные
   DWord flags;
-  DWord header_size;            // Полный размер заголовка
-  DWord metadata_size;          // Размер метаданных
-  DWord compressed_size;        // Размер сжатых данных
-  DWord huffman_tree_size;      // Размер сериализованного дерева Хаффмана
+  DWord header_size;      // Полный размер заголовка
+  DWord metadata_size;    // Размер метаданных
+  DWord compressed_size;  // Размер сжатых данных
+
+  // Размеры моделей/деревьев для первичного алгоритма
+  DWord
+    primary_tree_model_size;  // Общий размер дерева/модели первичного алгоритма
+  DWord huffman_tree_size;    // Размер сериализованного дерева Хаффмана
   DWord arithmetic_model_size;  // Размер сериализованной арифметической модели
   DWord shannon_tree_size;      // Размер сериализованного дерева Шеннона-Фано
-  DWord rle_context_size;       // Размер контекста RLE
-  DWord lz78_context_size;      // Размер контекста LZ78
-  DWord lz77_context_size;      // Размер контекста LZ77
+
+  // Размеры контекстов для вторичного алгоритма
+  DWord secondary_context_size;  // Общий размер контекста вторичного алгоритма
+  DWord rle_context_size;        // Размер контекста RLE
+  DWord lz78_context_size;       // Размер контекста LZ78
+  DWord lz77_context_size;       // Размер контекста LZ77
 
   // Контрольные суммы
   DWord header_crc;

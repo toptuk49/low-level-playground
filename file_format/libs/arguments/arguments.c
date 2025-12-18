@@ -14,6 +14,8 @@ struct ProgramArguments
   char* input;
   char* output;
   char* algorithm;
+  char* secondary_algorithm;
+  bool two_staged;
 };
 
 ProgramArguments* program_arguments_create(void)
@@ -29,6 +31,8 @@ ProgramArguments* program_arguments_create(void)
   args->input = NULL;
   args->output = NULL;
   args->algorithm = NULL;
+  args->secondary_algorithm = NULL;
+  args->two_staged = false;
 
   return args;
 }
@@ -44,6 +48,7 @@ void program_arguments_destroy(ProgramArguments* self)
   free(self->input);
   free(self->output);
   free(self->algorithm);
+  free(self->secondary_algorithm);
   free(self);
 }
 
@@ -55,11 +60,14 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
   }
 
   int option_index = 0;
-  static struct option long_options[] = {{"mode", required_argument, 0, 0},
-                                         {"input", required_argument, 0, 0},
-                                         {"output", required_argument, 0, 0},
-                                         {"algorithm", required_argument, 0, 0},
-                                         {0, 0, 0, 0}};
+  static struct option long_options[] = {
+    {"mode", required_argument, 0, 0},
+    {"input", required_argument, 0, 0},
+    {"output", required_argument, 0, 0},
+    {"algorithm", required_argument, 0, 0},
+    {"secondary-algorithm", required_argument, 0, 0},
+    {"two-staged", no_argument, 0, 0},
+    {0, 0, 0, 0}};
 
   optind = 1;  // Reset getopt
 
@@ -78,7 +86,6 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
       {
         case 0:  // --mode
           free(self->mode);
-
           self->mode = (char*)malloc(strlen(optarg) + 1);
           if (self->mode == NULL)
           {
@@ -90,7 +97,6 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
 
         case 1:  // --input
           free(self->input);
-
           self->input = (char*)malloc(strlen(optarg) + 1);
           if (self->input == NULL)
           {
@@ -102,7 +108,6 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
 
         case 2:  // --output
           free(self->output);
-
           self->output = (char*)malloc(strlen(optarg) + 1);
           if (self->output == NULL)
           {
@@ -111,9 +116,9 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
           }
           strcpy(self->output, optarg);
           break;
+
         case 3:  // --algorithm
           free(self->algorithm);
-
           self->algorithm = (char*)malloc(strlen(optarg) + 1);
           if (self->algorithm == NULL)
           {
@@ -123,6 +128,24 @@ bool program_arguments_parse(ProgramArguments* self, int argc, char** argv)
           }
           strcpy(self->algorithm, optarg);
           break;
+
+        case 4:  // --secondary-algorithm
+          free(self->secondary_algorithm);
+          self->secondary_algorithm = (char*)malloc(strlen(optarg) + 1);
+          if (self->secondary_algorithm == NULL)
+          {
+            printf(
+              "Произошла ошибка выделения памяти для аргумента "
+              "secondary-algorithm!\n");
+            return false;
+          }
+          strcpy(self->secondary_algorithm, optarg);
+          break;
+
+        case 5:  // --two-staged
+          self->two_staged = true;
+          break;
+
         default:
           printf("Обнаружен неизвестный аргумент командной строки!\n");
           return false;
@@ -184,4 +207,15 @@ const char* program_arguments_get_output(const ProgramArguments* self)
 const char* program_arguments_get_algorithm(const ProgramArguments* self)
 {
   return self ? self->algorithm : NULL;
+}
+
+const char* program_arguments_get_secondary_algorithm(
+  const ProgramArguments* self)
+{
+  return self ? self->secondary_algorithm : NULL;
+}
+
+bool program_arguments_get_two_staged(const ProgramArguments* self)
+{
+  return self ? self->two_staged : false;
 }

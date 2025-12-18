@@ -51,12 +51,14 @@ Result compressed_archive_header_init(CompressedArchiveHeader* header,
   header->header_size = COMPRESSED_ARCHIVE_HEADER_SIZE;
   header->metadata_size = 0;
   header->compressed_size = 0;
+  header->primary_tree_model_size = 0;
   header->huffman_tree_size = 0;
   header->arithmetic_model_size = 0;
   header->shannon_tree_size = 0;
+  header->secondary_context_size = 0;
   header->rle_context_size = 0;
   header->lz78_context_size = 0;
-  header->lz78_context_size = 0;
+  header->lz77_context_size = 0;
   header->header_crc = 0;
   header->data_crc = 0;
 
