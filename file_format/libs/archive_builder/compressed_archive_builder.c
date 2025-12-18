@@ -13,6 +13,7 @@
 #include "huffman.h"
 #include "lz77.h"
 #include "lz78.h"
+#include "markov_model.h"
 #include "path_utils.h"
 #include "rle.h"
 #include "shannon.h"
@@ -1153,6 +1154,36 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
           printf(
             "Очень низкая энтропия, выбираем RLE в качестве вторичного "
             "алгоритма\n");
+
+          // Дополнительный анализ через Маркова
+          MarkovModel* markov = markov_model_create();
+          if (markov)
+          {
+            markov_model_process_data(markov, self->all_data,
+                                      self->all_data_size);
+
+            // Проверяем наличие длинных повторений
+            bool has_long_repetitions = false;
+            for (int i = 0; i < 256; i++)
+            {
+              double prob =
+                markov_model_get_conditional_probability(markov, i, i);
+              if (prob > 0.8)
+              {
+                has_long_repetitions = true;
+                printf("  Символ 0x%02X имеет P(x|x)=%.3f - хорош для RLE\n", i,
+                       prob);
+              }
+            }
+
+            if (!has_long_repetitions)
+            {
+              printf("  ВНИМАНИЕ: RLE может быть неэффективен\n");
+              printf("  Рассмотрите другие алгоритмы (Huffman/Arithmetic)\n");
+            }
+
+            markov_model_destroy(markov);
+          }
         }
         else if (entropy < 5.0)
         {
@@ -1292,6 +1323,36 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         {
           primary_algo = COMPRESSION_RLE;
           printf("Очень низкая энтропия, выбираем алгоритм RLE\n");
+
+          // Дополнительный анализ через Маркова
+          MarkovModel* markov = markov_model_create();
+          if (markov)
+          {
+            markov_model_process_data(markov, self->all_data,
+                                      self->all_data_size);
+
+            // Проверяем наличие длинных повторений
+            bool has_long_repetitions = false;
+            for (int i = 0; i < 256; i++)
+            {
+              double prob =
+                markov_model_get_conditional_probability(markov, i, i);
+              if (prob > 0.8)
+              {
+                has_long_repetitions = true;
+                printf("  Символ 0x%02X имеет P(x|x)=%.3f - хорош для RLE\n", i,
+                       prob);
+              }
+            }
+
+            if (!has_long_repetitions)
+            {
+              printf("  ВНИМАНИЕ: RLE может быть неэффективен\n");
+              printf("  Рассмотрите другие алгоритмы (Huffman/Arithmetic)\n");
+            }
+
+            markov_model_destroy(markov);
+          }
         }
         else if (entropy < 4.0)
         {

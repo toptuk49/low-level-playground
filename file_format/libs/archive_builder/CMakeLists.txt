@@ -8,6 +8,7 @@ target_link_libraries(archive_builder PUBLIC
     huffman
     lz77
     lz78
+    markov_model
     path_utils
     rle
     shannon
