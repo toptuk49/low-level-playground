@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
-project(encoding C)
+project(db C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(PostgreSQL REQUIRED)
 
 add_subdirectory(src)
 add_subdirectory(libs)
