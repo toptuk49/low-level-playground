@@ -181,8 +181,18 @@ void add_string_param(QueryParams* params, int index, const char* value)
 {
   if (index < params->count)
   {
-    params->values[index] = strdup(value);
-    params->lengths[index] = (int)strlen(value);
+    size_t length = strlen(value);
+
+    params->values[index] = (char*)malloc(length + 1);
+    if (params->values[index] == NULL)
+    {
+      printf("Произошла ошибка при выделении памяти под параметр!\n");
+      free_query_params(params);
+      exit(1);
+    }
+    strcpy((char*)params->values[index], value);
+
+    params->lengths[index] = (int)length;
     params->formats[index] = 0;  // Text format
   }
 }
@@ -191,12 +201,26 @@ void add_int_param(QueryParams* params, int index, int value)
 {
   if (index < params->count)
   {
-    // Convert int to string
+    if (params->values[index])
+    {
+      free((void*)params->values[index]);
+    }
+
     const int BUFFER_SIZE = 20;
     char buffer[BUFFER_SIZE];
     snprintf(buffer, sizeof(buffer), "%d", value);
-    params->values[index] = strdup(buffer);
-    params->lengths[index] = (int)strlen(buffer);
+    size_t length = strlen(buffer);
+
+    params->values[index] = (char*)malloc(length + 1);
+    if (params->values[index] == NULL)
+    {
+      printf("Произошла ошибка при выделении памяти под строку параметра!\n");
+      free_query_params(params);
+      exit(1);
+    }
+    strcpy((char*)params->values[index], buffer);
+
+    params->lengths[index] = (int)length;
     params->formats[index] = 0;  // Text format
   }
 }
