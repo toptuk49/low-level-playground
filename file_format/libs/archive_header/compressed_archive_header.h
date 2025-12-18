@@ -19,6 +19,7 @@ typedef enum
   COMPRESSION_SHANNON = 3,
   COMPRESSION_RLE = 4,
   COMPRESSION_LZ78 = 5,
+  COMPRESSION_LZ77 = 6,
 } CompressionAlgorithm;
 
 typedef enum
@@ -39,6 +40,7 @@ typedef enum
   FLAG_SHANNON_TREE = 1 << 6,      // Содержит дерево Шеннона-Фано
   FLAG_RLE_CONTEXT = 1 << 7,       // Содержит контекст RLE
   FLAG_LZ78_CONTEXT = 1 << 8,      // Содержит контекст LZ78
+  FLAG_LZ77_CONTEXT = 1 << 9,      // Содержит контекст LZ77
 } CompressedArchiveFlags;
 
 typedef struct
@@ -64,6 +66,7 @@ typedef struct
   DWord shannon_tree_size;      // Размер сериализованного дерева Шеннона-Фано
   DWord rle_context_size;       // Размер контекста RLE
   DWord lz78_context_size;      // Размер контекста LZ78
+  DWord lz77_context_size;      // Размер контекста LZ77
 
   // Контрольные суммы
   DWord header_crc;

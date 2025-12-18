@@ -9,6 +9,7 @@
 #include "compressed_archive_header.h"
 #include "file_table.h"
 #include "huffman.h"
+#include "lz77.h"
 #include "lz78.h"
 #include "path_utils.h"
 #include "rle.h"
@@ -27,6 +28,8 @@ struct CompressedArchiveReader
   ShannonTree* shannon_tree;  // Дерево Шеннона (если используется)
   RLEContext* rle_context;    // Контекст RLE (если используется)
   LZ78Context* lz78_context;  // Контекст LZ78 (если используется)
+  Byte* lz77_context_data;    // Данные контекста LZ77 (префикс)
+  Size lz77_context_size;     // Размер контекста LZ77
 };
 
 CompressedArchiveReader* compressed_archive_reader_create(
@@ -67,6 +70,8 @@ CompressedArchiveReader* compressed_archive_reader_create(
   reader->shannon_tree = NULL;
   reader->rle_context = NULL;
   reader->lz78_context = NULL;
+  reader->lz77_context_data = NULL;
+  reader->lz77_context_size = 0;
 
   printf("\n=== Открытие архива для чтения ===\n");
   printf("Файл: %s\n", input_filename);
@@ -99,6 +104,7 @@ CompressedArchiveReader* compressed_archive_reader_create(
   printf("Размер дерева Шеннона: %u байт\n", reader->header.shannon_tree_size);
   printf("Размер контекста RLE: %u байт\n", reader->header.rle_context_size);
   printf("Размер контекста LZ78: %u байт\n", reader->header.lz78_context_size);
+  printf("Размер контекста LZ77: %u байт\n", reader->header.lz77_context_size);
 
   if (!compressed_archive_header_is_valid(&reader->header))
   {
@@ -127,12 +133,13 @@ CompressedArchiveReader* compressed_archive_reader_create(
 
   if ((reader->header.flags &
        (FLAG_HUFFMAN_TREE | FLAG_ARITHMETIC_MODEL | FLAG_SHANNON_TREE |
-        FLAG_RLE_CONTEXT | FLAG_LZ78_CONTEXT)) &&
+        FLAG_RLE_CONTEXT | FLAG_LZ78_CONTEXT | FLAG_LZ77_CONTEXT)) &&
       (reader->header.huffman_tree_size > 0 ||
        reader->header.arithmetic_model_size > 0 ||
        reader->header.shannon_tree_size > 0 ||
        reader->header.rle_context_size > 0 ||
-       reader->header.lz78_context_size > 0))
+       reader->header.lz78_context_size > 0 ||
+       reader->header.lz77_context_size > 0))
   {
     QWord model_offset = COMPRESSED_ARCHIVE_HEADER_SIZE;
     model_offset += sizeof(DWord);  // file_count
@@ -387,6 +394,41 @@ CompressedArchiveReader* compressed_archive_reader_create(
       free(model_data);
       printf("Контекст LZ78 создан (LZ78 не требует сериализации контекста)\n");
     }
+    else if ((reader->header.flags & FLAG_LZ77_CONTEXT) &&
+             reader->header.lz77_context_size > 0 &&
+             reader->header.primary_compression == COMPRESSION_LZ77)
+    {
+      printf("\n=== Чтение контекста LZ77 ===\n");
+      printf("Смещение контекста: %llu байт\n", model_offset);
+      printf("Размер контекста: %u байт\n", reader->header.lz77_context_size);
+
+      model_size = reader->header.lz77_context_size;
+      model_data = (Byte*)malloc(model_size * sizeof(Byte));
+      if (model_data == NULL)
+      {
+        printf("Произошла ошибка выделения памяти!\n");
+        goto error;
+      }
+
+      result = file_read_at(reader->archive_file, model_data, model_size,
+                            model_offset);
+      if (result != RESULT_OK)
+      {
+        printf("Произошла ошибка при чтении контекста LZ77!\n");
+        free(model_data);
+        goto error;
+      }
+
+      // LZ77 контекст - это просто префикс (1 байт)
+      reader->lz77_context_data = model_data;
+      reader->lz77_context_size = model_size;
+
+      printf("Контекст LZ77 прочитан успешно\n");
+      if (model_size >= 1)
+      {
+        printf("Префикс LZ77: 0x%02X\n", model_data[0]);
+      }
+    }
   }
   else
   {
@@ -430,6 +472,11 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
   if (self->lz78_context)
   {
     lz78_destroy(self->lz78_context);
+  }
+
+  if (self->lz77_context_data)
+  {
+    free(self->lz77_context_data);
   }
 
   file_table_destroy(self->file_table);
@@ -487,6 +534,7 @@ static Result extract_single_file(CompressedArchiveReader* self,
            : self->header.primary_compression == COMPRESSION_SHANNON ? "SHANNON"
            : self->header.primary_compression == COMPRESSION_RLE     ? "RLE"
            : self->header.primary_compression == COMPRESSION_LZ78    ? "LZ78"
+           : self->header.primary_compression == COMPRESSION_LZ77    ? "LZ77"
                                                                   : "UNKNOWN");
 
     final_data = malloc(entry->original_size);
@@ -551,6 +599,28 @@ static Result extract_single_file(CompressedArchiveReader* self,
 
       result = lz78_decompress(file_data, entry->compressed_size, &final_data,
                                &expected_size);
+    }
+    else if (self->header.primary_compression == COMPRESSION_LZ77)
+    {
+      printf("Декомпрессия методом LZ77...\n");
+      printf("  Входные данные: %llu байт\n", entry->compressed_size);
+      printf("  Ожидаемый размер: %llu байт\n", entry->original_size);
+
+      // LZ77 использует только префикс из контекста
+      Byte prefix = 0;
+      if (self->lz77_context_data && self->lz77_context_size >= 1)
+      {
+        prefix = self->lz77_context_data[0];
+      }
+      else
+      {
+        printf("  ВНИМАНИЕ: префикс LZ77 не найден, используется 0x00\n");
+      }
+
+      printf("  Префикс LZ77: 0x%02X\n", prefix);
+
+      result = lz77_decompress(file_data, entry->compressed_size, &final_data,
+                               &expected_size, prefix);
     }
     else
     {

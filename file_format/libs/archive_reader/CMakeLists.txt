@@ -6,6 +6,7 @@ target_link_libraries(archive_reader PUBLIC
     arithmetic
     file_table
     huffman
+    lz77
     lz78
     path_utils
     rle

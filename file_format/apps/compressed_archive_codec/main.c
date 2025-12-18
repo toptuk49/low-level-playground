@@ -24,6 +24,7 @@ typedef enum
   ALGORITHM_SHANNON,
   ALGORITHM_RLE,
   ALGORITHM_LZ78,
+  ALGORITHM_LZ77,
   ALGORITHM_NONE,
   ALGORITHM_UNKNOWN,
 } CompressionAlgorithmChoice;
@@ -93,6 +94,9 @@ int main(int argc, char** argv)
         break;
       case ALGORITHM_LZ78:
         algorithm_str = "lz78";
+        break;
+      case ALGORITHM_LZ77:
+        algorithm_str = "lz77";
         break;
       case ALGORITHM_NONE:
         algorithm_str = "none";
@@ -191,6 +195,11 @@ static CompressionAlgorithmChoice parse_algorithm(const char* algorithm)
     return ALGORITHM_LZ78;
   }
 
+  if (strcmp(algorithm, "lz77") == 0)
+  {
+    return ALGORITHM_LZ77;
+  }
+
   if (strcmp(algorithm, "none") == 0 || strcmp(algorithm, "n") == 0)
   {
     return ALGORITHM_NONE;
@@ -213,6 +222,8 @@ static const char* algorithm_to_string(CompressionAlgorithmChoice algorithm)
       return "RLE";
     case ALGORITHM_LZ78:
       return "LZ78";
+    case ALGORITHM_LZ77:
+      return "LZ77";
     case ALGORITHM_NONE:
       return "NONE (без сжатия)";
     case ALGORITHM_AUTO:
@@ -236,6 +247,7 @@ static void print_usage()
   printf("  shannon, shan, s  - алгоритм Шеннона\n");
   printf("  rle, r      - метод RLE\n");
   printf("  lz78        - метод LZ78 (вариант LZW)\n");
+  printf("  lz77        - метод LZ77\n");
   printf("  none, n     - без сжатия\n");
   printf("\nПримеры:\n");
   printf(
@@ -252,7 +264,10 @@ static void print_usage()
     "text.txt --output text.rle\n");
   printf(
     "  compressed_archive_codec --mode encode --algorithm lz78 --input "
-    "text.txt --output text.rle\n");
+    "text.txt --output text.lz78\n");
+  printf(
+    "  compressed_archive_codec --mode encode --algorithm lz77 --input "
+    "text.txt --output text.lz77\n");
   printf(
     "  compressed_archive_codec --mode decode --input archive.compressed "
     "--output extracted\n");
