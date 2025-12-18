@@ -41,8 +41,8 @@ struct CompressedArchiveReader
   RLEContext* secondary_rle_context;  // Контекст RLE для вторичного алгоритма
   Byte* secondary_lz77_context_data;  // Данные контекста LZ77 для вторичного
                                       // алгоритма
-  Size secondary_lz77_context_size;  // Размер контекста LZ77 для вторичного
-                                     // алгоритма
+  Size secondary_lz77_context_size;   // Размер контекста LZ77 для вторичного
+                                      // алгоритма
 };
 
 CompressedArchiveReader* compressed_archive_reader_create(
@@ -575,16 +575,24 @@ void compressed_archive_reader_destroy(CompressedArchiveReader* self)
 }
 
 // Функция для двухэтапной декомпрессии
-static Result apply_two_stage_decompression(const Byte* input, Size input_size,
-                                            Byte** output, Size* output_size,
-                                            CompressionAlgorithm primary_algo,
-                                            CompressionAlgorithm secondary_algo,
-                                            void* primary_context,
-                                            void* secondary_context)
+// Функция для двухэтапной декомпрессии
+static Result apply_two_stage_decompression(
+  const Byte* input, Size input_size, Byte** output, Size* output_size,
+  CompressionAlgorithm primary_algo, CompressionAlgorithm secondary_algo,
+  void* primary_context, void* secondary_context, bool primary_failed)
 {
   printf("[TWO-STAGE] Начало двухэтапной декомпрессии\n");
   printf("[TWO-STAGE] Входной размер: %zu байт\n", input_size);
   printf("[TWO-STAGE] Ожидаемый выход: %zu байт\n", *output_size);
+
+  // ИСПРАВЛЕНИЕ: Если первичное сжатие не применялось при кодировании,
+  // не применяем его и при декодировании
+  if (primary_failed)
+  {
+    printf("[TWO-STAGE] Первичное сжатие не применялось, пропускаем этап 2\n");
+    // Пропускаем этап первичной декомпрессии
+    primary_algo = COMPRESSION_NONE;
+  }
 
   Result result = RESULT_OK;
   Byte* stage1_output = NULL;
@@ -676,7 +684,7 @@ static Result apply_two_stage_decompression(const Byte* input, Size input_size,
   }
 
   // Этап 2: Декомпрессия первичного алгоритма
-  if (primary_algo != COMPRESSION_NONE)
+  if (primary_algo != COMPRESSION_NONE && !primary_failed)
   {
     printf("[TWO-STAGE] Этап 2: Декомпрессия первичного алгоритма (%s)\n",
            primary_algo == COMPRESSION_HUFFMAN      ? "HUFFMAN"
@@ -865,10 +873,12 @@ static Result extract_single_file(CompressedArchiveReader* self,
         secondary_context = self->secondary_lz77_context_data;
       }
 
+      bool primary_failed = (entry->compressed_size == entry->original_size);
+
       result = apply_two_stage_decompression(
         file_data, entry->compressed_size, &final_data, &final_size,
         self->header.primary_compression, self->header.secondary_compression,
-        primary_context, secondary_context);
+        primary_context, secondary_context, primary_failed);
     }
     else
     {

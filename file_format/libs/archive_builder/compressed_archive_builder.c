@@ -855,7 +855,7 @@ static Result apply_two_stage_compression(
   const Byte* input, Size input_size, Byte** output, Size* output_size,
   CompressionAlgorithm primary_algo, CompressionAlgorithm secondary_algo,
   const Byte* context_data, Size context_size, CompressedFileData* primary_data,
-  CompressedFileData* secondary_data)
+  CompressedFileData* secondary_data, bool* primary_failed)
 {
   printf("[TWO-STAGE] Начало двухэтапного сжатия\n");
   printf("[TWO-STAGE] Исходный размер: %zu байт\n", input_size);
@@ -880,48 +880,230 @@ static Result apply_two_stage_compression(
   Byte* stage1_output = NULL;
   Size stage1_size = 0;
 
-  // Этап 1: Первичное сжатие (обычно с контекстом)
+  if (primary_failed)
+  {
+    *primary_failed = false;
+  }
+
+  // Этап 1: Первичное сжатие (с контекстом)
   if (primary_algo != COMPRESSION_NONE)
   {
-    CompressedFileData stage1_data;
-    memset(&stage1_data, 0, sizeof(stage1_data));
-    stage1_data.algorithm = primary_algo;
-
-    result = compress_file_data("[memory]", primary_algo, context_data,
-                                context_size, &stage1_data);
-
-    if (result == RESULT_OK && stage1_data.compressed_data)
+    // ИСПРАВЛЕНИЕ: Прямое сжатие входных данных, а не чтение из файла
+    if (primary_algo == COMPRESSION_HUFFMAN)
     {
-      // Копируем результаты первичного сжатия
-      stage1_output = stage1_data.compressed_data;
-      stage1_size = stage1_data.compressed_size;
-
-      // Сохраняем данные модели для первичного алгоритма
-      if (primary_data)
+      HuffmanTree* tree = huffman_tree_create();
+      if (tree == NULL)
       {
-        primary_data->algorithm = primary_algo;
-        primary_data->tree_model_data = stage1_data.tree_model_data;
-        primary_data->tree_model_size = stage1_data.tree_model_size;
-
-        // Копируем модель/дерево в зависимости от алгоритма
-        if (primary_algo == COMPRESSION_HUFFMAN)
-        {
-          primary_data->huffman_tree = stage1_data.huffman_tree;
-        }
-        else if (primary_algo == COMPRESSION_ARITHMETIC)
-        {
-          primary_data->arithmetic_model = stage1_data.arithmetic_model;
-        }
-        else if (primary_algo == COMPRESSION_SHANNON)
-        {
-          primary_data->shannon_tree = stage1_data.shannon_tree;
-        }
-        else if (primary_algo == COMPRESSION_RLE)
-        {
-          primary_data->rle_context = stage1_data.rle_context;
-        }
+        return RESULT_MEMORY_ERROR;
       }
 
+      // Строим дерево на основе глобальных данных (контекста)
+      if (context_data && context_size > 0)
+      {
+        result = huffman_tree_build(tree, context_data, context_size);
+      }
+      else
+      {
+        // Если нет глобальных данных, используем входные данные
+        result = huffman_tree_build(tree, input, input_size);
+      }
+
+      if (result == RESULT_OK)
+      {
+        // Сжимаем входные данные
+        result = huffman_compress(input, input_size, &stage1_output,
+                                  &stage1_size, tree);
+
+        if (result == RESULT_OK && primary_data)
+        {
+          primary_data->algorithm = COMPRESSION_HUFFMAN;
+          primary_data->huffman_tree = tree;
+
+          // Сериализуем дерево для сохранения в архив
+          result = huffman_serialize_tree(tree, &primary_data->tree_model_data,
+                                          &primary_data->tree_model_size);
+        }
+        else
+        {
+          huffman_tree_destroy(tree);
+        }
+      }
+      else
+      {
+        huffman_tree_destroy(tree);
+      }
+    }
+    else if (primary_algo == COMPRESSION_ARITHMETIC)
+    {
+      ArithmeticModel* model = arithmetic_model_create();
+      if (model == NULL)
+      {
+        return RESULT_MEMORY_ERROR;
+      }
+
+      // Строим модель на основе глобальных данных (контекста)
+      if (context_data && context_size > 0)
+      {
+        result = arithmetic_model_build(model, context_data, context_size);
+      }
+      else
+      {
+        // Если нет глобальных данных, используем входные данные
+        result = arithmetic_model_build(model, input, input_size);
+      }
+
+      if (result == RESULT_OK)
+      {
+        // Сжимаем входные данные
+        result = arithmetic_compress(input, input_size, &stage1_output,
+                                     &stage1_size, model);
+
+        if (result == RESULT_OK && primary_data)
+        {
+          primary_data->algorithm = COMPRESSION_ARITHMETIC;
+          primary_data->arithmetic_model = model;
+
+          // Сериализуем модель для сохранения в архив
+          result =
+            arithmetic_serialize_model(model, &primary_data->tree_model_data,
+                                       &primary_data->tree_model_size);
+        }
+        else
+        {
+          arithmetic_model_destroy(model);
+        }
+      }
+      else
+      {
+        arithmetic_model_destroy(model);
+      }
+    }
+    else if (primary_algo == COMPRESSION_SHANNON)
+    {
+      ShannonTree* tree = shannon_tree_create();
+      if (tree == NULL)
+      {
+        return RESULT_MEMORY_ERROR;
+      }
+
+      // Строим дерево на основе глобальных данных (контекста)
+      if (context_data && context_size > 0)
+      {
+        result = shannon_tree_build(tree, context_data, context_size);
+      }
+      else
+      {
+        // Если нет глобальных данных, используем входные данные
+        result = shannon_tree_build(tree, input, input_size);
+      }
+
+      if (result == RESULT_OK)
+      {
+        // Сжимаем входные данные
+        result = shannon_compress(input, input_size, &stage1_output,
+                                  &stage1_size, tree);
+
+        if (result == RESULT_OK && primary_data)
+        {
+          primary_data->algorithm = COMPRESSION_SHANNON;
+          primary_data->shannon_tree = tree;
+
+          // Сериализуем дерево для сохранения в архив
+          result = shannon_serialize_tree(tree, &primary_data->tree_model_data,
+                                          &primary_data->tree_model_size);
+        }
+        else
+        {
+          shannon_tree_destroy(tree);
+        }
+      }
+      else
+      {
+        shannon_tree_destroy(tree);
+      }
+    }
+    else if (primary_algo == COMPRESSION_RLE)
+    {
+      Byte prefix = 0;
+      if (context_data && context_size > 0)
+      {
+        // Используем префикс из глобальных данных
+        prefix = rle_analyze_prefix(context_data, context_size);
+      }
+      else
+      {
+        // Используем префикс из входных данных
+        prefix = rle_analyze_prefix(input, input_size);
+      }
+
+      RLEContext* rle_context = rle_create(prefix);
+      if (rle_context == NULL)
+      {
+        return RESULT_MEMORY_ERROR;
+      }
+
+      // Сжимаем входные данные
+      result = rle_compress(input, input_size, &stage1_output, &stage1_size,
+                            rle_context);
+
+      if (result == RESULT_OK && primary_data)
+      {
+        primary_data->algorithm = COMPRESSION_RLE;
+        primary_data->rle_context = rle_context;
+
+        // Сериализуем контекст для сохранения в архив
+        result =
+          rle_serialize_context(rle_context, &primary_data->tree_model_data,
+                                &primary_data->tree_model_size);
+      }
+      else
+      {
+        rle_destroy(rle_context);
+      }
+    }
+    else if (primary_algo == COMPRESSION_LZ77)
+    {
+      Byte prefix = 0;
+      if (context_data && context_size > 0)
+      {
+        // Используем префикс из глобальных данных
+        prefix = lz77_analyze_prefix(context_data, context_size);
+      }
+      else
+      {
+        // Используем префикс из входных данных
+        prefix = lz77_analyze_prefix(input, input_size);
+      }
+
+      // Сжимаем входные данные
+      result =
+        lz77_compress(input, input_size, &stage1_output, &stage1_size, prefix);
+
+      if (result == RESULT_OK && primary_data)
+      {
+        primary_data->algorithm = COMPRESSION_LZ77;
+        primary_data->tree_model_data = malloc(1);
+        if (primary_data->tree_model_data)
+        {
+          primary_data->tree_model_data[0] = prefix;
+          primary_data->tree_model_size = 1;
+        }
+      }
+    }
+    else if (primary_algo == COMPRESSION_LZ78)
+    {
+      // LZ78 не требует контекста
+      result = lz78_compress(input, input_size, &stage1_output, &stage1_size);
+
+      if (result == RESULT_OK && primary_data)
+      {
+        primary_data->algorithm = COMPRESSION_LZ78;
+        // LZ78 не требует сериализации модели
+      }
+    }
+
+    if (result == RESULT_OK && stage1_output)
+    {
       printf("[TWO-STAGE] Этап 1 завершен: %zu -> %zu байт (%.2f%%)\n",
              input_size, stage1_size,
              (1.0 - (double)stage1_size / (double)input_size) * 100);
@@ -930,11 +1112,22 @@ static Result apply_two_stage_compression(
     {
       printf(
         "[TWO-STAGE] Ошибка первичного сжатия, используем исходные данные\n");
+
+      if (primary_failed)
+      {
+        *primary_failed = true;
+      }
+
+      // Используем исходные данные
       stage1_output = (Byte*)malloc(input_size);
       if (stage1_output)
       {
         memcpy(stage1_output, input, input_size);
         stage1_size = input_size;
+      }
+      else
+      {
+        return RESULT_MEMORY_ERROR;
       }
     }
   }
@@ -947,20 +1140,25 @@ static Result apply_two_stage_compression(
       memcpy(stage1_output, input, input_size);
       stage1_size = input_size;
     }
+    else
+    {
+      return RESULT_MEMORY_ERROR;
+    }
     printf("[TWO-STAGE] Первичное сжатие отключено\n");
   }
 
   // Этап 2: Вторичное сжатие
-  if (stage1_output && secondary_algo != COMPRESSION_NONE &&
-      secondary_algo != primary_algo)
+  if (stage1_output && secondary_algo != COMPRESSION_NONE)
   {
     CompressedFileData stage2_data;
     memset(&stage2_data, 0, sizeof(stage2_data));
     stage2_data.algorithm = secondary_algo;
 
-    // Для вторичного сжатия используем данные после первичного сжатия
+    // Для вторичного сжатия используем данные после первичного сжатия (или
+    // исходные)
     if (secondary_algo == COMPRESSION_RLE)
     {
+      // Анализируем данные для выбора оптимального префикса
       Byte prefix = rle_analyze_prefix(stage1_output, stage1_size);
       RLEContext* rle_context = rle_create(prefix);
       if (rle_context)
@@ -980,6 +1178,14 @@ static Result apply_two_stage_compression(
           rle_serialize_context(rle_context, &secondary_data->tree_model_data,
                                 &secondary_data->tree_model_size);
         }
+        else
+        {
+          rle_destroy(rle_context);
+        }
+      }
+      else
+      {
+        result = RESULT_MEMORY_ERROR;
       }
     }
     else if (secondary_algo == COMPRESSION_LZ78)
@@ -991,6 +1197,7 @@ static Result apply_two_stage_compression(
       if (result == RESULT_OK && secondary_data)
       {
         secondary_data->algorithm = COMPRESSION_LZ78;
+        // LZ78 не требует сериализации контекста
       }
     }
     else if (secondary_algo == COMPRESSION_LZ77)
@@ -1011,6 +1218,15 @@ static Result apply_two_stage_compression(
         }
       }
     }
+    else
+    {
+      // Для других алгоритмов (Huffman, Arithmetic, Shannon)
+      // они не должны использоваться как вторичные в двухэтапном сжатии
+      printf(
+        "[TWO-STAGE] ВНИМАНИЕ: алгоритм %d не поддерживается как вторичный\n",
+        secondary_algo);
+      result = RESULT_ERROR;
+    }
 
     if (result == RESULT_OK && stage2_data.compressed_data)
     {
@@ -1022,6 +1238,12 @@ static Result apply_two_stage_compression(
       free(stage1_output);
       *output = stage2_data.compressed_data;
       *output_size = stage2_data.compressed_size;
+
+      // Освобождаем ресурсы stage2_data, но оставляем compressed_data
+      if (secondary_algo != COMPRESSION_RLE)
+      {
+        free_compressed_file_data(&stage2_data, true);
+      }
     }
     else
     {
@@ -1031,6 +1253,7 @@ static Result apply_two_stage_compression(
         "результат\n");
       *output = stage1_output;
       *output_size = stage1_size;
+      result = RESULT_OK;
     }
   }
   else
@@ -1038,8 +1261,7 @@ static Result apply_two_stage_compression(
     // Без вторичного сжатия
     *output = stage1_output;
     *output_size = stage1_size;
-    printf(
-      "[TWO-STAGE] Вторичное сжатие отключено или совпадает с первичным\n");
+    printf("[TWO-STAGE] Вторичное сжатие отключено\n");
   }
 
   printf("[TWO-STAGE] Итоговый размер: %zu байт\n", *output_size);
@@ -1089,11 +1311,15 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
     printf("Энтропия данных: %.4f бит/символ\n", entropy);
 
     // Выбор алгоритмов
+    // В compressed_archive_builder_finalize() обновите логику выбора
+    // алгоритмов:
+
+    // После анализа энтропии, когда use_two_stage = true:
     if (use_two_stage)
     {
       printf("\n=== РЕЖИМ ДВУХЭТАПНОГО СЖАТИЯ ===\n");
 
-      // Определяем первичный алгоритм (с контекстом)
+      // Определяем первичный алгоритм (контекстно-зависимый)
       if (self->force_algorithm && self->selected_algorithm != COMPRESSION_NONE)
       {
         primary_algo = self->selected_algorithm;
@@ -1109,6 +1335,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       else
       {
         // Автоматический выбор первичного алгоритма на основе энтропии
+        // Для двухэтапного сжатия первичный должен быть контекстно-зависимым
         if (entropy < 4.0)
         {
           primary_algo = COMPRESSION_HUFFMAN;
@@ -1132,7 +1359,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         }
       }
 
-      // Определяем вторичный алгоритм (без контекста)
+      // Определяем вторичный алгоритм (контекстно-независимый)
       if (self->selected_secondary_algorithm != COMPRESSION_NONE)
       {
         secondary_algo = self->selected_secondary_algorithm;
@@ -1147,7 +1374,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
       }
       else
       {
-        // Автоматический выбор вторичного алгоритма
+        // Автоматический выбор вторичного алгоритма (контекстно-независимого)
         if (entropy < 3.0)
         {
           secondary_algo = COMPRESSION_RLE;
@@ -1179,7 +1406,7 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
             if (!has_long_repetitions)
             {
               printf("  ВНИМАНИЕ: RLE может быть неэффективен\n");
-              printf("  Рассмотрите другие алгоритмы (Huffman/Arithmetic)\n");
+              printf("  Рассмотрите другие алгоритмы (LZ77/LZ78)\n");
             }
 
             markov_model_destroy(markov);
@@ -1200,104 +1427,20 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         }
       }
 
-      // Создаем модель для первичного алгоритма
-      if (primary_algo == COMPRESSION_HUFFMAN)
-      {
-        HuffmanTree* tree = huffman_tree_create();
-        if (tree)
-        {
-          Result result =
-            huffman_tree_build(tree, self->all_data, self->all_data_size);
-          if (result == RESULT_OK)
-          {
-            result = huffman_serialize_tree(tree, &primary_tree_model_data,
-                                            &primary_tree_model_size);
-            if (result == RESULT_OK)
-            {
-              primary_compression_model = tree;
-              primary_model_data.huffman_tree = tree;
-              primary_model_data.tree_model_data = primary_tree_model_data;
-              primary_model_data.tree_model_size = primary_tree_model_size;
-            }
-          }
-        }
-      }
-      else if (primary_algo == COMPRESSION_ARITHMETIC)
-      {
-        ArithmeticModel* model = arithmetic_model_create();
-        if (model)
-        {
-          Result result =
-            arithmetic_model_build(model, self->all_data, self->all_data_size);
-          if (result == RESULT_OK)
-          {
-            result = arithmetic_serialize_model(model, &primary_tree_model_data,
-                                                &primary_tree_model_size);
-            if (result == RESULT_OK)
-            {
-              primary_compression_model = model;
-              primary_model_data.arithmetic_model = model;
-              primary_model_data.tree_model_data = primary_tree_model_data;
-              primary_model_data.tree_model_size = primary_tree_model_size;
-            }
-          }
-        }
-      }
-      else if (primary_algo == COMPRESSION_SHANNON)
-      {
-        ShannonTree* tree = shannon_tree_create();
-        if (tree)
-        {
-          Result result =
-            shannon_tree_build(tree, self->all_data, self->all_data_size);
-          if (result == RESULT_OK)
-          {
-            result = shannon_serialize_tree(tree, &primary_tree_model_data,
-                                            &primary_tree_model_size);
-            if (result == RESULT_OK)
-            {
-              primary_compression_model = tree;
-              primary_model_data.shannon_tree = tree;
-              primary_model_data.tree_model_data = primary_tree_model_data;
-              primary_model_data.tree_model_size = primary_tree_model_size;
-            }
-          }
-        }
-      }
-
-      // Создаем контекст для вторичного алгоритма
-      if (secondary_algo == COMPRESSION_RLE)
-      {
-        Byte prefix = rle_analyze_prefix(self->all_data, self->all_data_size);
-        RLEContext* rle_context = rle_create(prefix);
-        if (rle_context)
-        {
-          secondary_compression_model = rle_context;
-          secondary_model_data.rle_context = rle_context;
-
-          // Сериализуем контекст
-          Result result = rle_serialize_context(
-            rle_context, &secondary_context_data, &secondary_context_size);
-          if (result != RESULT_OK)
-          {
-            printf("[RLE] Ошибка сериализации контекста!\n");
-            secondary_context_data = NULL;
-            secondary_context_size = 0;
-          }
-        }
-      }
-      else if (secondary_algo == COMPRESSION_LZ77)
-      {
-        Byte prefix = lz77_analyze_prefix(self->all_data, self->all_data_size);
-        secondary_context_size = 1;
-        secondary_context_data = malloc(secondary_context_size);
-        if (secondary_context_data)
-        {
-          secondary_context_data[0] = prefix;
-          secondary_model_data.tree_model_data = secondary_context_data;
-          secondary_model_data.tree_model_size = secondary_context_size;
-        }
-      }
+      // ВАЖНО: Для двухэтапного сжатия МЕНЯЕМ ПОРЯДОК
+      // Вторичный (контекстно-независимый) применяется ПЕРВЫМ
+      // Первичный (контекстно-зависимый) применяется ВТОРЫМ
+      printf("\n=== ПОРЯДОК СЖАТИЯ ===\n");
+      printf("1. %s (контекстно-независимый)\n",
+             secondary_algo == COMPRESSION_RLE    ? "RLE"
+             : secondary_algo == COMPRESSION_LZ78 ? "LZ78"
+             : secondary_algo == COMPRESSION_LZ77 ? "LZ77"
+                                                  : "N/A");
+      printf("2. %s (контекстно-зависимый)\n",
+             primary_algo == COMPRESSION_HUFFMAN      ? "HUFFMAN"
+             : primary_algo == COMPRESSION_ARITHMETIC ? "ARITHMETIC"
+             : primary_algo == COMPRESSION_SHANNON    ? "SHANNON"
+                                                      : "N/A");
     }
     else
     {
@@ -1683,11 +1826,11 @@ Result compressed_archive_builder_finalize(CompressedArchiveBuilder* self)
         const Byte* original_data = file_get_buffer(input_file);
         Size original_size = file_get_size(input_file);
 
-        // Применяем двухэтапное сжатие
+        bool primary_failed = false;
         result = apply_two_stage_compression(
           original_data, original_size, &compressed_data, &compressed_size,
           primary_algo, secondary_algo, self->all_data, self->all_data_size,
-          &primary_model_data, &secondary_model_data);
+          &primary_model_data, &secondary_model_data, &primary_failed);
 
         file_close(input_file);
         file_destroy(input_file);
