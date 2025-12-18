@@ -6,6 +6,7 @@
 #include "arguments.h"
 #include "file.h"
 #include "markov_model.h"
+#include "rle_analysis.h"
 
 static void print_results(const MarkovModel* model, const char* filename,
                           Size file_size);
@@ -90,6 +91,14 @@ int main(int argc, char** argv)
   else
   {
     printf("Некоторые тестовые сценарии провалились!\n");
+  }
+
+  printf("\nАнализ эффективности RLE ---\n\n");
+  Result rle_analysis =
+    analyze_rle_efficiency(file_get_buffer(file), file_get_size(file));
+  if (rle_analysis != RESULT_OK)
+  {
+    printf("Ошибка анализа RLE эффективности!\n");
   }
 
   markov_model_destroy(model);
