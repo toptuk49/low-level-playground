@@ -1,5 +1,7 @@
-#ifndef SUBSTRINGS_MARKOV_MODEL_H
-#define SUBSTRINGS_MARKOV_MODEL_H
+#ifndef MARKOV_MODEL_MARKOV_MODEL_H
+#define MARKOV_MODEL_MARKOV_MODEL_H
+
+#include <inttypes.h>
 
 #include "types.h"
 
@@ -28,4 +30,4 @@ uint64_t markov_model_get_total_pairs(const MarkovModel* self);
 
 bool markov_model_validate_test_cases(void);
 
-#endif  // SUBSTRINGS_MARKOV_MODEL_H
+#endif  // MARKOV_MODEL_MARKOV_MODEL_H

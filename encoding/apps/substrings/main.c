@@ -106,7 +106,7 @@ static void print_results(const MarkovModel* model, const char* filename,
   printf("Анализ источника Маркова ---\n\n");
   printf("Файл: %s\n", filename);
   printf("Размер файла: %zu Байт\n", file_size);
-  printf("Всего символов: %" PRIu64 "\n", file_size);
+  printf("Всего символов: %" PRIu64 "\n", (uint64_t)file_size);
   printf("Всего двухсимвольных подстрок: %" PRIu64 "\n",
          markov_model_get_total_pairs(model));
   printf("I_CM1(Q)[бит] = %.2f\n",
@@ -254,7 +254,7 @@ static void analyze_compression_efficiency(const MarkovModel* model,
   if (total_archive_size < file_size)
   {
     printf("Сжатие выгодно (сохраняет %zu Байт)\n",
-           file_size - total_archive_size);
+           (size_t)file_size - (size_t)total_archive_size);
   }
   else
   {

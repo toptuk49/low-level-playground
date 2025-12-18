@@ -1,7 +1,7 @@
-add_executable(substrings main.c markov_model.c)
+add_executable(substrings main.c)
 
 target_link_libraries(substrings PRIVATE
-    arguments file common m
+    arguments common file markov_model m
 )
 
 target_include_directories(substrings PRIVATE
