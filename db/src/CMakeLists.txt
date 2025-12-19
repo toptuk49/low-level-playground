@@ -1,40 +1,54 @@
-find_package(PostgreSQL QUIET)
-
-if(PostgreSQL_FOUND)
-    message(STATUS "Found PostgreSQL via FindPostgreSQL")
-else()
-    find_path(PostgreSQL_INCLUDE_DIR
-        NAMES libpq-fe.h
-        PATHS /home/linuxbrew/.linuxbrew/opt/libpq/include
-              /usr/local/opt/libpq/include
-              /usr/include/postgresql
-        NO_DEFAULT_PATH
-    )
-    
-    find_library(PostgreSQL_LIBRARY
-        NAMES pq libpq
-        PATHS /home/linuxbrew/.linuxbrew/opt/libpq/lib
-              /usr/local/opt/libpq/lib
-              /usr/lib/x86_64-linux-gnu
-        NO_DEFAULT_PATH
-    )
-    
-    if(PostgreSQL_INCLUDE_DIR AND PostgreSQL_LIBRARY)
-        message(STATUS "Found PostgreSQL manually: ${PostgreSQL_INCLUDE_DIR}, ${PostgreSQL_LIBRARY}")
-        set(PostgreSQL_FOUND TRUE)
-    else()
-        message(FATAL_ERROR "PostgreSQL not found!")
-    endif()
-endif()
-
+add_executable(auth_crud auth_crud.c)
+add_executable(crud_demonstration crud_demonstration.c)
 add_executable(db main.c)
+add_executable(query_executor query_executor.c)
+add_executable(representations representations.c)
+add_executable(sql_injection sql_injection.c)
 
-if(PostgreSQL_FOUND)
-    target_include_directories(db PRIVATE ${PostgreSQL_INCLUDE_DIR})
-    target_link_libraries(db PRIVATE ${PostgreSQL_LIBRARY})
-    target_compile_definitions(db PRIVATE HAVE_LIBPQ=1)
-endif()
+target_link_libraries(auth_crud PRIVATE
+    postgres
+)
+
+target_link_libraries(crud_demonstration PRIVATE
+    postgres
+)
+
+target_link_libraries(db PRIVATE
+    postgres
+)
+
+target_link_libraries(query_executor PRIVATE
+    postgres
+)
+
+target_link_libraries(representations PRIVATE
+    postgres
+)
+
+target_link_libraries(sql_injection PRIVATE
+    postgres
+)
+
+target_include_directories(auth_crud PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_include_directories(crud_demonstration PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
 target_include_directories(db PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_include_directories(query_executor PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_include_directories(representations PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_include_directories(sql_injection PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

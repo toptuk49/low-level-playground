@@ -1,0 +1,9 @@
+[requires]
+libpq/17.7
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout

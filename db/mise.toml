@@ -1,0 +1,51 @@
+min_version = "2024.9.5"
+
+[env]
+PROJECT_NAME = "{{ config_root | basename }}"
+BUILD_DIR = "{{ config_root }}/build"
+CONAN_BUILD_DIR = "{{ config_root }}/build/Release"
+CONAN_TOOLCHAIN = "{{ config_root }}/build/build/Release/generators/conan_toolchain.cmake"
+INIT_SCRIPT_DIR = "{{ config_root }}/database"
+
+[tools]
+cmake = "latest"
+make = "latest"
+conan = "latest"
+
+[tasks.init]
+description = "Initialize the database"
+run = "cd $INIT_SCRIPT_DIR && chmod +x init_database.sh && source init_database.sh"
+
+[tasks.install]
+description = "Install Conan dependencies"
+run = "conan install . --output-folder=$BUILD_DIR --build=missing"
+
+[tasks.configure]
+description = "Configure CMake project"
+run = "mkdir -p $BUILD_DIR && cd $BUILD_DIR && cmake .. -DCMAKE_TOOLCHAIN_FILE=$CONAN_TOOLCHAIN -DCMAKE_BUILD_TYPE=Release"
+
+[tasks.build]
+description = "Build the project"
+run = "cd $BUILD_DIR && make"
+
+[tasks.clean]
+description = "Clean build directory"
+run = "rm -rf $BUILD_DIR"
+
+[tasks.dev]
+description = "Clean, install, configure, build, and initialize database"
+run = [
+  "mise run init",
+  "mise run clean",
+  "mise run install",
+  "mise run configure",
+  "mise run build",
+]
+
+[tasks.info]
+description = "Print project information"
+run = '''
+echo "Project: $PROJECT_NAME"
+echo "Build Directory: $BUILD_DIR"
+echo "Conan Toolchain: $CONAN_TOOLCHAIN"
+'''
