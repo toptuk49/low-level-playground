@@ -60,4 +60,10 @@ int execute_prepared(Connection* connection, const char* name,
                      QueryParams* params);
 void free_prepared_statement(PreparedStatement* statement);
 
+// Представления
+int create_view(Connection* connection, const char* view_name,
+                const char* query);
+int drop_view(Connection* connection, const char* view_name);
+int materialize_view(Connection* connection, const char* view_name);
+
 #endif  // POSTGRES_POSTGRES_H

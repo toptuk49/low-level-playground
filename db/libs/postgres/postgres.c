@@ -851,3 +851,58 @@ void free_prepared_statement(PreparedStatement* statement)
     postgres_log(LOG_DEBUG, "Подготовленное выражение освобождено");
   }
 }
+
+// ==================== ПРЕДСТАВЛЕНИЯ ====================
+int create_view(Connection* connection, const char* view_name,
+                const char* query)
+{
+  if (is_sql_injection(view_name) || is_sql_injection(query))
+  {
+    postgres_log(LOG_SECURITY,
+                 "Обнаружены опасные конструкции при создании представления");
+    return 0;
+  }
+
+  const int BUFFER_SIZE = 1024;
+  char create_sql[BUFFER_SIZE];
+  snprintf(create_sql, sizeof(create_sql), "CREATE OR REPLACE VIEW %s AS %s",
+           view_name, query);
+
+  return execute_query(connection, QUERY_OTHER, create_sql, NULL);
+}
+
+int drop_view(Connection* connection, const char* view_name)
+{
+  if (is_sql_injection(view_name))
+  {
+    postgres_log(LOG_SECURITY,
+                 "Обнаружены опасные конструкции при удалении представления");
+    return 0;
+  }
+
+  const int BUFFER_SIZE = 256;
+  char drop_sql[BUFFER_SIZE];
+  snprintf(drop_sql, sizeof(drop_sql), "DROP VIEW IF EXISTS %s", view_name);
+
+  return execute_query(connection, QUERY_OTHER, drop_sql, NULL);
+}
+
+int materialize_view(Connection* connection, const char* view_name)
+{
+  if (is_sql_injection(view_name))
+  {
+    postgres_log(
+      LOG_SECURITY,
+      "Обнаружены опасные конструкции при материализации представления");
+    return 0;
+  }
+
+  const int BUFFER_SIZE = 512;
+  char materialize_sql[BUFFER_SIZE];
+  snprintf(materialize_sql, sizeof(materialize_sql),
+           "CREATE MATERIALIZED VIEW IF NOT EXISTS %s_materialized AS SELECT * "
+           "FROM %s",
+           view_name, view_name);
+
+  return execute_query(connection, QUERY_OTHER, materialize_sql, NULL);
+}
