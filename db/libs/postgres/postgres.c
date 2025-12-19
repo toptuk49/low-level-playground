@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "types.h"
 
@@ -83,6 +84,201 @@ static const char* pq_status_to_string(ConnStatusType pq_status)
   }
 }
 
+// ==================== АУТЕНТИФИКАЦИЯ И СЕССИИ ====================
+
+UserSession* create_user_session()
+{
+  UserSession* session = (UserSession*)malloc(sizeof(UserSession));
+  if (session == NULL)
+  {
+    postgres_log(LOG_ERROR, "Ошибка выделения памяти для сессии");
+    return NULL;
+  }
+
+  session->username = NULL;
+  session->role = USER_ROLE_UNKNOWN;
+  session->student_id = -1;
+  session->is_authenticated = 0;
+
+  return session;
+}
+
+void destroy_user_session(UserSession* session)
+{
+  if (session)
+  {
+    if (session->username)
+    {
+      free(session->username);
+    }
+    free(session);
+    postgres_log(LOG_DEBUG, "Сессия пользователя уничтожена");
+  }
+}
+
+int authenticate_user(Connection* conn, UserSession* session,
+                      const char* username, const char* password)
+{
+  if (conn == NULL || session == NULL || username == NULL || password == NULL)
+  {
+    postgres_log(LOG_ERROR, "Некорректные параметры для аутентификации");
+    return 0;
+  }
+
+  if (conn->connection)
+  {
+    PQfinish(conn->connection);
+  }
+
+  const int BUFFER_SIZE = 512;
+  char connection_params[BUFFER_SIZE];
+  snprintf(
+    connection_params, sizeof(connection_params),
+    "host=localhost port=5432 user=%s password=%s dbname=enhanced_students",
+    username, password);
+
+  conn->connection = PQconnectdb(connection_params);
+
+  if (PQstatus(conn->connection) != CONNECTION_OK)
+  {
+    postgres_log(LOG_ERROR, "Аутентификация не удалась: %s",
+                 PQerrorMessage(conn->connection));
+    return 0;
+  }
+
+  session->role = detect_user_role(conn, username);
+  session->is_authenticated = 1;
+
+  if (session->username)
+  {
+    free(session->username);
+  }
+  session->username = strdup(username);
+
+  if (session->role == USER_ROLE_USER || session->role == USER_ROLE_JUNIOR)
+  {
+    char* query = "SELECT student_id FROM students WHERE last_name = $1";
+    QueryParams* params = create_string_param(username);
+
+    PGresult* result =
+      PQexecParams(conn->connection, query, 1, NULL, params->values,
+                   params->lengths, params->formats, 0);
+
+    if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) > 0)
+    {
+      const int BASE = 10;
+      session->student_id = (int)strtol(PQgetvalue(result, 0, 0), NULL, BASE);
+    }
+
+    PQclear(result);
+    free_query_params(params);
+  }
+
+  postgres_log(LOG_INFO, "Пользователь %s аутентифицирован как %s", username,
+               get_user_role_string(session->role));
+  return 1;
+}
+
+UserRole detect_user_role(Connection* conn, const char* username)
+{
+  if (conn == NULL || username == NULL)
+  {
+    return USER_ROLE_UNKNOWN;
+  }
+
+  const int BUFFER_SIZE = 256;
+  char check_admin_query[BUFFER_SIZE];
+  snprintf(check_admin_query, sizeof(check_admin_query),
+           "SELECT rolsuper FROM pg_roles WHERE rolname = '%s'", username);
+
+  PGresult* result = PQexec(conn->connection, check_admin_query);
+
+  if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) > 0)
+  {
+    char* is_super = PQgetvalue(result, 0, 0);
+    if (strcmp(is_super, "t") == 0)
+    {
+      PQclear(result);
+      return USER_ROLE_ADMIN;
+    }
+  }
+
+  PQclear(result);
+
+  if (strstr(username, "admin") != NULL || strstr(username, "Admin") != NULL)
+  {
+    return USER_ROLE_ADMIN;
+  }
+
+  if (strstr(username, "junior") != NULL || strstr(username, "Junior") != NULL)
+  {
+    return USER_ROLE_JUNIOR;
+  }
+
+  return USER_ROLE_USER;
+}
+
+const char* get_user_role_string(UserRole role)
+{
+  switch (role)
+  {
+    case USER_ROLE_ADMIN:
+      return "Администратор";
+    case USER_ROLE_JUNIOR:
+      return "Младший пользователь (только чтение)";
+    case USER_ROLE_USER:
+      return "Обычный пользователь";
+    default:
+      return "Неизвестная роль";
+  }
+}
+
+int has_permission(UserSession* session, QueryType query_type,
+                   const char* table)
+{
+  if (session == NULL || !session->is_authenticated)
+  {
+    postgres_log(LOG_WARNING, "Попытка доступа без аутентификации");
+    return 0;
+  }
+
+  if (session->role == USER_ROLE_ADMIN)
+  {
+    return 1;
+  }
+
+  if (session->role == USER_ROLE_JUNIOR)
+  {
+    if (query_type == QUERY_SELECT)
+    {
+      return 1;
+    }
+    postgres_log(LOG_WARNING,
+                 "Пользователь %s пытается выполнить операцию %d без прав",
+                 session->username, query_type);
+    return 0;
+  }
+
+  if (session->role == USER_ROLE_USER)
+  {
+    if (query_type == QUERY_SELECT)
+    {
+      return 1;
+    }
+
+    if ((query_type == QUERY_UPDATE || query_type == QUERY_DELETE) &&
+        table != NULL)
+    {
+      if (strcmp(table, "field_comprehensions") == 0)
+      {
+        return 1;
+      }
+    }
+  }
+
+  return 0;
+}
+
 // ==================== ЛОГИРОВАНИЕ ====================
 
 void set_log_level(LogLevel level)
@@ -136,6 +332,26 @@ void log_sql_injection_attempt(const char* query, const char* user_input)
     LOG_SECURITY,
     "Обнаружена попытка SQL-инъекции! Запрос: %s, Ввод пользователя: %s", query,
     user_input);
+}
+
+void log_operation(UserSession* session, const char* operation,
+                   const char* details)
+{
+  if (session == NULL || operation == NULL)
+  {
+    return;
+  }
+
+  time_t now = time(NULL);
+  const char BUFFER_SIZE = 64;
+  char timestamp[BUFFER_SIZE];
+  size_t bytes_written = strftime(timestamp, sizeof(timestamp),
+                                  "%Y-%m-%d %H:%M:%S", localtime(&now));
+
+  postgres_log(LOG_INFO, "[%s] %s: %s (Пользователь: %s, Роль: %s)", timestamp,
+               operation, details,
+               session->username ? session->username : "unknown",
+               get_user_role_string(session->role));
 }
 
 // ==================== МЕТОДЫ ЗАЩИТЫ ОТ SQL-ИНЪЕКЦИЙ ====================
@@ -487,6 +703,35 @@ static Oid get_oid_for_type(const char* value)
   return is_int ? INT4OID : TEXTOID;
 }
 
+int execute_query_with_permission(Connection* connection, UserSession* session,
+                                  QueryType type, const char* query,
+                                  QueryParams* params)
+{
+  if (!has_permission(session, type, NULL))
+  {
+    return 0;
+  }
+
+  const int BUFFER_SIZE = 256;
+  char log_details[BUFFER_SIZE];
+  snprintf(log_details, sizeof(log_details), "Выполнение запроса типа %d",
+           type);
+  log_operation(session, "QUERY_EXECUTION", log_details);
+
+  int result = execute_query(connection, type, query, params);
+
+  if (result)
+  {
+    log_operation(session, "QUERY_SUCCESS", "Запрос выполнен успешно");
+  }
+  else
+  {
+    log_operation(session, "QUERY_FAILURE", "Ошибка выполнения запроса");
+  }
+
+  return result;
+}
+
 int execute_query(Connection* connection, QueryType type, const char* query,
                   QueryParams* params)
 {
@@ -776,18 +1021,18 @@ PreparedStatement* prepare_statement(Connection* connection, const char* name,
     }
   }
 
-  PreparedStatement* stmt =
+  PreparedStatement* statement =
     (PreparedStatement*)malloc(sizeof(PreparedStatement));
-  if (stmt == NULL)
+  if (statement == NULL)
   {
     postgres_log(LOG_ERROR,
                  "Ошибка выделения памяти для подготовленного выражения");
     return NULL;
   }
 
-  stmt->name = strdup(name);
-  stmt->query = strdup(query);
-  stmt->n_params = param_count;
+  statement->name = strdup(name);
+  statement->query = strdup(query);
+  statement->n_params = param_count;
 
   PGresult* result =
     PQprepare(connection->connection, name, query, param_count, NULL);
@@ -796,10 +1041,10 @@ PreparedStatement* prepare_statement(Connection* connection, const char* name,
   {
     postgres_log(LOG_ERROR, "Не удалось подготовить выражение: %s",
                  PQerrorMessage(connection->connection));
-    free(stmt->name);
-    free(stmt->query);
-    free(stmt);
-    stmt = NULL;
+    free(statement->name);
+    free(statement->query);
+    free(statement);
+    statement = NULL;
   }
   else
   {
@@ -808,7 +1053,7 @@ PreparedStatement* prepare_statement(Connection* connection, const char* name,
   }
 
   PQclear(result);
-  return stmt;
+  return statement;
 }
 
 int execute_prepared(Connection* connection, const char* name,
@@ -905,4 +1150,226 @@ int materialize_view(Connection* connection, const char* view_name)
            view_name, view_name);
 
   return execute_query(connection, QUERY_OTHER, materialize_sql, NULL);
+}
+
+// ==================== CRUD ОПЕРАЦИИ ДЛЯ ОЦЕНОК ====================
+
+int add_grade(Connection* conn, UserSession* session, int student_id,
+              const char* field_name, int mark)
+{
+  if (!has_permission(session, QUERY_INSERT, "field_comprehensions"))
+  {
+    printf("У вас нет прав на добавление оценок!\n");
+    return 0;
+  }
+
+  if (is_sql_injection(field_name))
+  {
+    log_sql_injection_attempt("INSERT grade", field_name);
+    printf("Обнаружена попытка SQL-инъекции!\n");
+    return 0;
+  }
+
+  char* query =
+    "INSERT INTO field_comprehensions (student_id, field, mark) "
+    "VALUES ($1, "
+    "(SELECT field_id FROM fields WHERE field_name = $2 LIMIT 1), $3) "
+    "ON CONFLICT (student_id, field) DO UPDATE SET mark = EXCLUDED.mark";
+
+  QueryParams* params = create_query_params(3);
+  add_int_param(params, 0, student_id);
+  add_string_param(params, 1, field_name);
+  add_int_param(params, 2, mark);
+
+  int result =
+    execute_query_with_permission(conn, session, QUERY_INSERT, query, params);
+
+  if (result)
+  {
+    printf("✓ Оценка успешно добавлена/обновлена\n");
+    printf("  Студент: %d, Дисциплина: %s, Оценка: %d\n", student_id,
+           field_name, mark);
+  }
+
+  free_query_params(params);
+  return result;
+}
+
+int update_grade(Connection* conn, UserSession* session, int student_id,
+                 const char* field_name, int new_mark)
+{
+  if (!has_permission(session, QUERY_UPDATE, "field_comprehensions"))
+  {
+    printf("У вас нет прав на изменение оценок!\n");
+    return 0;
+  }
+
+  if (is_sql_injection(field_name))
+  {
+    log_sql_injection_attempt("UPDATE grade", field_name);
+    printf("Обнаружена попытка SQL-инъекции!\n");
+    return 0;
+  }
+
+  char* query =
+    "UPDATE field_comprehensions fc "
+    "SET mark = $1 "
+    "WHERE student_id = $2 "
+    "AND field = (SELECT field_id FROM fields WHERE field_name = $3 LIMIT 1)";
+
+  QueryParams* params = create_query_params(3);
+  add_int_param(params, 0, new_mark);
+  add_int_param(params, 1, student_id);
+  add_string_param(params, 2, field_name);
+
+  int result =
+    execute_query_with_permission(conn, session, QUERY_UPDATE, query, params);
+
+  if (result)
+  {
+    printf("✓ Оценка успешно обновлена\n");
+    printf("  Студент: %d, Дисциплина: %s, Новая оценка: %d\n", student_id,
+           field_name, new_mark);
+  }
+
+  free_query_params(params);
+  return result;
+}
+
+int delete_grade(Connection* conn, UserSession* session, int student_id,
+                 const char* field_name)
+{
+  if (!has_permission(session, QUERY_DELETE, "field_comprehensions"))
+  {
+    printf("У вас нет прав на удаление оценок!\n");
+    return 0;
+  }
+
+  if (is_sql_injection(field_name))
+  {
+    log_sql_injection_attempt("DELETE grade", field_name);
+    printf("Обнаружена попытка SQL-инъекции!\n");
+    return 0;
+  }
+
+  char* query =
+    "DELETE FROM field_comprehensions fc "
+    "WHERE student_id = $1 "
+    "AND field = (SELECT field_id FROM fields WHERE field_name = $2 LIMIT 1)";
+
+  QueryParams* params = create_query_params(2);
+  add_int_param(params, 0, student_id);
+  add_string_param(params, 1, field_name);
+
+  int result =
+    execute_query_with_permission(conn, session, QUERY_DELETE, query, params);
+
+  if (result)
+  {
+    printf("✓ Оценка успешно удалена\n");
+    printf("  Студент: %d, Дисциплина: %s\n", student_id, field_name);
+  }
+
+  free_query_params(params);
+  return result;
+}
+
+int get_student_grades(Connection* conn, UserSession* session, int student_id)
+{
+  if (!has_permission(session, QUERY_SELECT, "field_comprehensions"))
+  {
+    printf("У вас нет прав на просмотр оценок!\n");
+    return 0;
+  }
+
+  char* query =
+    "SELECT s.last_name, s.first_name, f.field_name, fc.mark "
+    "FROM students s "
+    "JOIN field_comprehensions fc ON s.student_id = fc.student_id "
+    "JOIN fields f ON fc.field = f.field_id "
+    "WHERE s.student_id = $1 "
+    "ORDER BY f.field_name";
+
+  QueryParams* params = create_int_param(student_id);
+
+  printf("Оценки студента (ID: %d):\n", student_id);
+  printf("============================\n");
+
+  int result =
+    execute_query_with_permission(conn, session, QUERY_SELECT, query, params);
+
+  free_query_params(params);
+  return result;
+}
+
+int search_student_grades(Connection* conn, UserSession* session,
+                          const char* last_name, const char* first_name,
+                          const char* group_number)
+{
+  if (!has_permission(session, QUERY_SELECT, "field_comprehensions"))
+  {
+    printf("У вас нет прав на поиск оценок!\n");
+    return 0;
+  }
+
+  if (is_sql_injection(last_name) || is_sql_injection(first_name) ||
+      is_sql_injection(group_number))
+  {
+    log_sql_injection_attempt("SEARCH grades", last_name);
+    printf("Обнаружена попытка SQL-инъекции!\n");
+    return 0;
+  }
+
+  char* query =
+    "SELECT s.student_id, s.last_name, s.first_name, s.students_group_number, "
+    "f.field_name, fc.mark "
+    "FROM students s "
+    "JOIN field_comprehensions fc ON s.student_id = fc.student_id "
+    "JOIN fields f ON fc.field = f.field_id "
+    "WHERE s.last_name LIKE $1 "
+    "AND s.first_name LIKE $2 "
+    "AND s.students_group_number LIKE $3 "
+    "ORDER BY s.last_name, s.first_name, f.field_name";
+
+  QueryParams* params = create_query_params(3);
+
+  const int BUFFER_SIZE = 256;
+  char safe_last_name[BUFFER_SIZE];
+  char safe_first_name[BUFFER_SIZE];
+  char safe_group[BUFFER_SIZE];
+
+  snprintf(safe_last_name, sizeof(safe_last_name), "%%%s%%", last_name);
+  snprintf(safe_first_name, sizeof(safe_first_name), "%%%s%%", first_name);
+  snprintf(safe_group, sizeof(safe_group), "%%%s%%", group_number);
+
+  add_string_param(params, 0, safe_last_name);
+  add_string_param(params, 1, safe_first_name);
+  add_string_param(params, 2, safe_group);
+
+  printf("Результаты поиска (%s %s, группа: %s):\n", last_name, first_name,
+         group_number);
+  printf("========================================\n");
+
+  int result =
+    execute_query_with_permission(conn, session, QUERY_SELECT, query, params);
+
+  free_query_params(params);
+  return result;
+}
+
+int get_my_grades(Connection* conn, UserSession* session)
+{
+  if (!has_permission(session, QUERY_SELECT, "field_comprehensions"))
+  {
+    return 0;
+  }
+
+  if (session->student_id == -1)
+  {
+    printf("Для вашего пользователя не найден ID студента.\n");
+    printf("Используйте поиск по фамилии и имени.\n");
+    return 0;
+  }
+
+  return get_student_grades(conn, session, session->student_id);
 }

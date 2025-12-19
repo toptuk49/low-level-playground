@@ -17,10 +17,22 @@ char* get_error_message(Connection* connection);
 void exit_with_error(Connection* connection);
 void finish_connection(Connection* connection);
 
+// Аутентификация и сессии
+UserSession* create_user_session();
+void destroy_user_session(UserSession* session);
+int authenticate_user(Connection* conn, UserSession* session,
+                      const char* username, const char* password);
+UserRole detect_user_role(Connection* conn, const char* username);
+const char* get_user_role_string(UserRole role);
+int has_permission(UserSession* session, QueryType query_type,
+                   const char* table);
+
 // Логирование
 void set_log_level(LogLevel level);
 void postgres_log(LogLevel level, const char* format, ...);
 void log_sql_injection_attempt(const char* query, const char* user_input);
+void log_operation(UserSession* session, const char* operation,
+                   const char* details);
 
 // Методы защиты от SQL-инъекций (из теории)
 void correct_apostrof(char* query);
@@ -38,6 +50,9 @@ void add_int_param(QueryParams* params, int index, int value);
 void free_query_params(QueryParams* params);
 
 // Единый интерфейс для запросов (CRUD)
+int execute_query_with_permission(Connection* connection, UserSession* session,
+                                  QueryType type, const char* query,
+                                  QueryParams* params);
 int execute_query(Connection* connection, QueryType type, const char* query,
                   QueryParams* params);
 void print_query(Connection* connection,
@@ -65,5 +80,20 @@ int create_view(Connection* connection, const char* view_name,
                 const char* query);
 int drop_view(Connection* connection, const char* view_name);
 int materialize_view(Connection* connection, const char* view_name);
+
+// CRUD операции для оценок (с проверкой прав)
+int add_grade(Connection* conn, UserSession* session, int student_id,
+              const char* field_name, int mark);
+int update_grade(Connection* conn, UserSession* session, int student_id,
+                 const char* field_name, int new_mark);
+int delete_grade(Connection* conn, UserSession* session, int student_id,
+                 const char* field_name);
+int get_student_grades(Connection* conn, UserSession* session, int student_id);
+int search_student_grades(Connection* conn, UserSession* session,
+                          const char* last_name, const char* first_name,
+                          const char* group_number);
+
+// Специальные функции для пользователей
+int get_my_grades(Connection* conn, UserSession* session);
 
 #endif  // POSTGRES_POSTGRES_H

@@ -1,6 +1,8 @@
 #ifndef POSTGRES_TYPES_H
 #define POSTGRES_TYPES_H
 
+#include <time.h>
+
 typedef enum
 {
   CONNECTION_STATUS_OK,
@@ -25,6 +27,24 @@ typedef enum
   LOG_ERROR,
   LOG_SECURITY
 } LogLevel;
+
+typedef enum
+{
+  USER_ROLE_ADMIN,
+  USER_ROLE_JUNIOR,
+  USER_ROLE_USER,
+  USER_ROLE_UNKNOWN
+} UserRole;
+
+typedef struct
+{
+  char* username;
+  UserRole role;
+  int student_id;
+  int is_authenticated;
+  time_t login_time;
+  int operations_count;
+} UserSession;
 
 typedef struct
 {
