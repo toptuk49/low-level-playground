@@ -7,7 +7,6 @@
 
 #define DELIMETER "-------------\n"
 
-// Vulnerable to SQL-injections request
 void unsafe_find_student(Connection* conn, int student_id,
                          const char* field_name)
 {
