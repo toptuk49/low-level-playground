@@ -22,7 +22,7 @@ public interface IDataGenerator
 
 public interface IBucketJoinExecutor
 {
-  TimeSpan ExecuteBucketJoin();
+  TimeSpan ExecuteBucketJoin(int threadCount = 1);
 }
 
 public interface ISqlJoinExecutor

@@ -15,8 +15,14 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     public List<TableARow> Rows;
   }
 
-  public TimeSpan ExecuteBucketJoin()
+  public TimeSpan ExecuteBucketJoin(int threadCount = 1)
   {
+    if (threadCount > 1)
+    {
+      var parallelExecutor = new BucketJoinExecutorParallel();
+      return parallelExecutor.ExecuteBucketJoin(threadCount);
+    }
+
     ClearResults();
     var startTime = DateTime.Now;
 
@@ -37,8 +43,8 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     connection.Open();
 
     using var command = new SqliteCommand(
-        "SELECT KeyField, Value1, Value2, Description FROM TableA_srt ORDER BY KeyField",
-        connection
+      "SELECT KeyField, Value1, Value2, Description FROM TableA_srt ORDER BY KeyField",
+      connection
     );
 
     using var reader = command.ExecuteReader();
@@ -46,12 +52,12 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     while (reader.Read())
     {
       results.Add(
-          new TableARow(
-              KeyField: reader.GetString(0),
-              Value1: reader.GetInt32(1),
-              Value2: reader.GetDouble(2),
-              Description: reader.GetString(3)
-          )
+        new TableARow(
+          KeyField: reader.GetString(0),
+          Value1: reader.GetInt32(1),
+          Value2: reader.GetDouble(2),
+          Description: reader.GetString(3)
+        )
       );
     }
 
@@ -66,8 +72,8 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     connection.Open();
 
     using var command = new SqliteCommand(
-        "SELECT KeyField, Value3, Value4, Status FROM TableB_srt ORDER BY KeyField",
-        connection
+      "SELECT KeyField, Value3, Value4, Status FROM TableB_srt ORDER BY KeyField",
+      connection
     );
 
     using var reader = command.ExecuteReader();
@@ -75,12 +81,12 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     while (reader.Read())
     {
       results.Add(
-          new TableBRow(
-              KeyField: reader.GetString(0),
-              Value3: reader.GetInt32(1),
-              Value4: DateTime.Parse(reader.GetString(2)), // SQLite stores dates as text
-              Status: reader.GetString(3)
-          )
+        new TableBRow(
+          KeyField: reader.GetString(0),
+          Value3: reader.GetInt32(1),
+          Value4: DateTime.Parse(reader.GetString(2)), // SQLite stores dates as text
+          Status: reader.GetString(3)
+        )
       );
     }
 
@@ -128,12 +134,12 @@ public class BucketJoinExecutor : IBucketJoinExecutor
           foreach (var bucketRow in bucket.Rows)
           {
             var record = new JoinResult(
-                KeyField: currentKey,
-                Value1: bucketRow.Value1,
-                Value3: rowB.Value3,
-                TotalValue: bucketRow.Value1 * rowB.Value3,
-                Description: bucketRow.Description,
-                Status: rowB.Status
+              KeyField: currentKey,
+              Value1: bucketRow.Value1,
+              Value3: rowB.Value3,
+              TotalValue: bucketRow.Value1 * rowB.Value3,
+              Description: bucketRow.Description,
+              Status: rowB.Status
             );
             results.Add(record);
           }
@@ -155,10 +161,10 @@ public class BucketJoinExecutor : IBucketJoinExecutor
     foreach (var record in results)
     {
       using var cmd = new SqliteCommand(
-          "INSERT INTO JoinResult (KeyField, Value1, Value3, TotalValue, Description, Status) "
-              + "VALUES (@key, @v1, @v3, @total, @desc, @status)",
-          connection,
-          transaction
+        "INSERT INTO JoinResult (KeyField, Value1, Value3, TotalValue, Description, Status) "
+          + "VALUES (@key, @v1, @v3, @total, @desc, @status)",
+        connection,
+        transaction
       );
 
       cmd.Parameters.AddWithValue("@key", record.KeyField);

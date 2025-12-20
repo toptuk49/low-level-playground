@@ -2,13 +2,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:BucketJoin.Presentation"
         mc:Ignorable="d"
         d:DesignWidth="800"
         d:DesignHeight="450"
         x:Class="BucketJoin.Presentation.MainWindow"
+        x:DataType="local:MainWindowViewModel"
         Title="Сравнение алгоритмов JOIN"
         Width="450"
-        Height="400">
+        Height="530">
     
     <StackPanel Margin="20" Spacing="10">
         
@@ -33,6 +35,28 @@
                 
                 <TextBlock x:Name="GenerateTimeResult" 
                            Text="Время генерации: -"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Параметры выполнения JOIN -->
+        <Border Padding="10" Background="#000000" CornerRadius="5">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Параметры выполнения JOIN" FontWeight="Bold"/>
+                
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="5">
+                    <TextBlock Text="Количество потоков:" Grid.Row="0" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="ThreadCountBox" Text="1" Grid.Row="0" Grid.Column="1"/>
+                    
+                    <TextBlock x:Name="OptimalThreads" 
+                               Text="Доступно потоков процессора: 1-4"
+                               Grid.Row="1" Grid.Column="1"
+                               VerticalAlignment="Center"/>
+                    
+                    <TextBlock Text="{Binding ProcessorCount}"
+                               Grid.Row="2" Grid.Column="1"
+                               VerticalAlignment="Center"/>
+                </Grid>
             </StackPanel>
         </Border>
         
@@ -64,8 +88,11 @@
                 <Button Content="Сравнить оба метода" 
                         Click="Compare_Click"
                         HorizontalAlignment="Left"/>
+                
+                <TextBlock x:Name="ComparisonResult" 
+                           Text=""
+                           FontWeight="SemiBold"/>
             </StackPanel>
         </Border>
-        
     </StackPanel>
 </Window>
