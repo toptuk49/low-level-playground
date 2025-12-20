@@ -1,0 +1,47 @@
+[tools]
+dotnet = "9.0.100"
+
+[tasks.init]
+description = "Initialize application"
+run = [
+  "dotnet new sln -n BucketJoin",
+  "dotnet new install Avalonia.Templates",
+  # Presentation layer
+  "dotnet new avalonia.app -n BucketJoin.Presentation -o src/BucketJoin.Presentation",
+  "dotnet sln BucketJoin.sln add src/BucketJoin.Presentation/BucketJoin.Presentation.csproj",
+  # Infrastructure layer
+  "dotnet new classlib -n BucketJoin.Infrastructure -o src/BucketJoin.Infrastructure",
+  "dotnet sln BucketJoin.sln add src/BucketJoin.Infrastructure/BucketJoin.Infrastructure.csproj",
+  # Domain layer
+  "dotnet new classlib -n BucketJoin.Domain -o src/BucketJoin.Domain",
+  "dotnet sln BucketJoin.sln add src/BucketJoin.Domain/BucketJoin.Domain.csproj",
+  # Layers connection
+  "dotnet add src/BucketJoin.Presentation/BucketJoin.Presentation.csproj reference src/BucketJoin.Infrastructure/BucketJoin.Infrastructure.csproj",
+  "dotnet add src/BucketJoin.Presentation/BucketJoin.Presentation.csproj reference src/BucketJoin.Domain/BucketJoin.Domain.csproj",
+  "dotnet add src/BucketJoin.Infrastructure/BucketJoin.Infrastructure.csproj reference src/BucketJoin.Domain/BucketJoin.Domain.csproj",
+  # Add SQL packages to Infrastructure
+  "dotnet add src/BucketJoin.Infrastructure package Microsoft.Data.Sqlite",
+  # Clean up unnecessary files
+  "rm src/BucketJoin.Domain/Class1.cs",
+  "rm src/BucketJoin.Infrastructure/Class1.cs",
+]
+
+[tasks.run]
+description = "Run application"
+run = ["dotnet run --project src/BucketJoin.Presentation"]
+
+[tasks.watch-run]
+description = "Run application with hot reload"
+run = ["dotnet watch --project src/BucketJoin.Presentation run"]
+
+[tasks.build]
+description = "Build all projects"
+run = "dotnet build"
+
+[tasks.format]
+description = "Format all files"
+run = "dotnet format BucketJoin.sln"
+
+[tasks.test]
+description = "Run all tests"
+run = "dotnet test BucketJoin.sln"

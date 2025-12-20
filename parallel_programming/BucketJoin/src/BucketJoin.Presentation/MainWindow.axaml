@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="800"
+        d:DesignHeight="450"
+        x:Class="BucketJoin.Presentation.MainWindow"
+        Title="Сравнение алгоритмов JOIN"
+        Width="450"
+        Height="400">
+    
+    <StackPanel Margin="20" Spacing="10">
+        
+        <!-- Генерация данных -->
+        <Border Padding="10" Background="#000000" CornerRadius="5">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Генерация тестовых данных" FontWeight="Bold"/>
+                
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="5">
+                    <TextBlock Text="Количество записей:" Grid.Row="0" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="RecordCountBox" Text="10000" Grid.Row="0" Grid.Column="1"/>
+                    
+                    <TextBlock Text="Длина ключа:" Grid.Row="1" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="KeyLengthBox" Text="2" Grid.Row="1" Grid.Column="1"/>
+                </Grid>
+                
+                <Button Content="Сгенерировать данные" 
+                        Click="GenerateData_Click"
+                        HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Выполнение JOIN -->
+        <Border Padding="10" Background="#000000" CornerRadius="5">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Выполнение JOIN" FontWeight="Bold"/>
+                
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="5">
+                    <Button Content="Bucket Join" 
+                            Click="BucketJoin_Click"
+                            Grid.Row="0" Grid.Column="0"
+                            HorizontalAlignment="Left"/>
+                    <TextBlock x:Name="BucketJoinResult" 
+                               Text="Время: -"
+                               Grid.Row="0" Grid.Column="1"
+                               VerticalAlignment="Center"/>
+                    
+                    <Button Content="SQL Join" 
+                            Click="SqlJoin_Click"
+                            Grid.Row="1" Grid.Column="0"
+                            HorizontalAlignment="Left"/>
+                    <TextBlock x:Name="SqlJoinResult" 
+                               Text="Время: -"
+                               Grid.Row="1" Grid.Column="1"
+                               VerticalAlignment="Center"/>
+                </Grid>
+                
+                <Button Content="Сравнить оба метода" 
+                        Click="Compare_Click"
+                        HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+        
+    </StackPanel>
+</Window>
