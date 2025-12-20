@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="500"
+        d:DesignHeight="450"
+        x:Class="ParallelBucketJoin.Presentation.MainWindow"
+        Title="Параллельный Bucket Merge"
+        Width="500"
+        Height="500">
+    
+    <StackPanel Margin="20" Spacing="15">
+        
+        <!-- Заголовок -->
+        <TextBlock Text="Параллельный Bucket Merge" 
+                   FontSize="18" 
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- Информация о системе -->
+        <Border Padding="10" Background="#000000" CornerRadius="5">
+            <StackPanel>
+                <TextBlock x:Name="ProcessorInfo" FontWeight="SemiBold"/>
+                <TextBlock Text="Алгоритм 'черпака' с разделением на потоки" 
+                           FontStyle="Italic"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Генерация данных -->
+        <Border Padding="15" Background="#000000" CornerRadius="5">
+            <StackPanel Spacing="10">
+                <TextBlock Text="Генерация тестовых данных" 
+                           FontWeight="Bold"/>
+                
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                    <TextBlock Text="Количество ключей:" 
+                               Grid.Row="0" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="KeyCountBox" 
+                             Grid.Row="0" Grid.Column="1"
+                             Text="100"/>
+                    
+                    <TextBlock Text="Min записей на ключ:" 
+                               Grid.Row="1" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="MinRecordsBox" 
+                             Grid.Row="1" Grid.Column="1"
+                             Text="5"/>
+                    
+                    <TextBlock Text="Max записей на ключ:" 
+                               Grid.Row="2" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="MaxRecordsBox" 
+                             Grid.Row="2" Grid.Column="1"
+                             Text="15"/>
+                </Grid>
+                
+                <Button Content="Сгенерировать данные" 
+                        Click="GenerateData_Click"
+                        HorizontalAlignment="Left"/>
+                
+                <TextBlock x:Name="GenerateStatus" 
+                           Text="Статус: Ожидание..."
+                           FontStyle="Italic"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Параметры выполнения -->
+        <Border Padding="15" Background="#000000" CornerRadius="5">
+            <StackPanel Spacing="10">
+                <TextBlock Text="Выполнение Bucket Merge" 
+                           FontWeight="Bold"/>
+                
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="8">
+                    <TextBlock Text="Количество потоков:" 
+                               Grid.Row="0" Grid.Column="0"
+                               VerticalAlignment="Center"/>
+                    <TextBox x:Name="ThreadCountBox" 
+                             Grid.Row="0" Grid.Column="1"
+                             Text="4"/>
+                    
+                    <TextBlock Text="Рекомендуется: 1-4" 
+                               Grid.Row="1" Grid.Column="1"
+                               FontStyle="Italic"/>
+                </Grid>
+                
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="Выполнить Merge" 
+                            Click="ExecuteMerge_Click"/>
+                    
+                    <Button Content="Сравнить" 
+                            Click="CompareParallel_Click"/>
+                </StackPanel>
+                
+                <TextBlock x:Name="MergeStatus" 
+                           Text="Статус: Ожидание..."
+                           FontStyle="Italic"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Пояснение алгоритма -->
+        <Border Padding="10" Background="#000000" CornerRadius="5">
+            <StackPanel>
+                <TextBlock Text="Алгоритм 'Черпака':" FontWeight="SemiBold"/>
+                <TextBlock Text="1. Чтение отсортированных таблиц Master и Slave" 
+                           Margin="0,2,0,0"/>
+                <TextBlock Text="2. Сбор записей с одинаковыми ключами в 'ведра'" 
+                           Margin="0,2,0,0"/>
+                <TextBlock Text="3. Параллельный JOIN через разделение ключей по потокам" 
+                           Margin="0,2,0,0"/>
+                <TextBlock Text="4. Вычисление среднего значения для каждого ключа" 
+                           Margin="0,2,0,0"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</Window>

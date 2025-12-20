@@ -1,0 +1,47 @@
+[tools]
+dotnet = "9.0.100"
+
+[tasks.init]
+description = "Initialize application"
+run = [
+  "dotnet new sln -n ParallelBucketJoin",
+  "dotnet new install Avalonia.Templates",
+  # Presentation layer
+  "dotnet new avalonia.app -n ParallelBucketJoin.Presentation -o src/ParallelBucketJoin.Presentation",
+  "dotnet sln ParallelBucketJoin.sln add src/ParallelBucketJoin.Presentation/ParallelBucketJoin.Presentation.csproj",
+  # Infrastructure layer
+  "dotnet new classlib -n ParallelBucketJoin.Infrastructure -o src/ParallelBucketJoin.Infrastructure",
+  "dotnet sln ParallelBucketJoin.sln add src/ParallelBucketJoin.Infrastructure/ParallelBucketJoin.Infrastructure.csproj",
+  # Domain layer
+  "dotnet new classlib -n ParallelBucketJoin.Domain -o src/ParallelBucketJoin.Domain",
+  "dotnet sln ParallelBucketJoin.sln add src/ParallelBucketJoin.Domain/ParallelBucketJoin.Domain.csproj",
+  # Layers connection
+  "dotnet add src/ParallelBucketJoin.Presentation/ParallelBucketJoin.Presentation.csproj reference src/ParallelBucketJoin.Infrastructure/ParallelBucketJoin.Infrastructure.csproj",
+  "dotnet add src/ParallelBucketJoin.Presentation/ParallelBucketJoin.Presentation.csproj reference src/ParallelBucketJoin.Domain/ParallelBucketJoin.Domain.csproj",
+  "dotnet add src/ParallelBucketJoin.Infrastructure/ParallelBucketJoin.Infrastructure.csproj reference src/ParallelBucketJoin.Domain/ParallelBucketJoin.Domain.csproj",
+  # Add SQL packages to Infrastructure
+  "dotnet add src/ParallelBucketJoin.Infrastructure package Microsoft.Data.Sqlite",
+  # Clean up unnecessary files
+  "rm src/ParallelBucketJoin.Domain/Class1.cs",
+  "rm src/ParallelBucketJoin.Infrastructure/Class1.cs",
+]
+
+[tasks.run]
+description = "Run application"
+run = ["dotnet run --project src/ParallelBucketJoin.Presentation"]
+
+[tasks.watch-run]
+description = "Run application with hot reload"
+run = ["dotnet watch --project src/ParallelBucketJoin.Presentation run"]
+
+[tasks.build]
+description = "Build all projects"
+run = "dotnet build"
+
+[tasks.format]
+description = "Format all files"
+run = "dotnet format ParallelBucketJoin.sln"
+
+[tasks.test]
+description = "Run all tests"
+run = "dotnet test ParallelBucketJoin.sln"

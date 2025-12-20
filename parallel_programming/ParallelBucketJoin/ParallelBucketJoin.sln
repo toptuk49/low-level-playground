@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{CE75555B-2715-489D-B37E-F427F498CF49}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelBucketJoin.Presentation", "src\ParallelBucketJoin.Presentation\ParallelBucketJoin.Presentation.csproj", "{3DEA64BE-6195-4866-A67E-A7481A59E7E2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelBucketJoin.Infrastructure", "src\ParallelBucketJoin.Infrastructure\ParallelBucketJoin.Infrastructure.csproj", "{6382CEB3-B470-4261-93CB-4E5B492CFF28}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelBucketJoin.Domain", "src\ParallelBucketJoin.Domain\ParallelBucketJoin.Domain.csproj", "{B9E3B519-5916-4C85-98EC-2CDDEFFD320A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3DEA64BE-6195-4866-A67E-A7481A59E7E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DEA64BE-6195-4866-A67E-A7481A59E7E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DEA64BE-6195-4866-A67E-A7481A59E7E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DEA64BE-6195-4866-A67E-A7481A59E7E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6382CEB3-B470-4261-93CB-4E5B492CFF28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6382CEB3-B470-4261-93CB-4E5B492CFF28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6382CEB3-B470-4261-93CB-4E5B492CFF28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6382CEB3-B470-4261-93CB-4E5B492CFF28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9E3B519-5916-4C85-98EC-2CDDEFFD320A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9E3B519-5916-4C85-98EC-2CDDEFFD320A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9E3B519-5916-4C85-98EC-2CDDEFFD320A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9E3B519-5916-4C85-98EC-2CDDEFFD320A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3DEA64BE-6195-4866-A67E-A7481A59E7E2} = {CE75555B-2715-489D-B37E-F427F498CF49}
+		{6382CEB3-B470-4261-93CB-4E5B492CFF28} = {CE75555B-2715-489D-B37E-F427F498CF49}
+		{B9E3B519-5916-4C85-98EC-2CDDEFFD320A} = {CE75555B-2715-489D-B37E-F427F498CF49}
+	EndGlobalSection
+EndGlobal
