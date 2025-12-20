@@ -13,6 +13,8 @@ public partial class MainWindow : Window
   private readonly IBucketJoinExecutor _bucketJoin;
   private readonly ISqlJoinExecutor _sqlJoin;
 
+  private TimeSpan? _lastGenerationTime;
+
   public MainWindow(
     IDataGenerator dataGenerator,
     IBucketJoinExecutor bucketJoin,
@@ -32,7 +34,15 @@ public partial class MainWindow : Window
       int recordCount = int.Parse(RecordCountBox.Text);
       int keyLength = int.Parse(KeyLengthBox.Text);
 
-      await Task.Run(() => _dataGenerator.GenerateTestData(recordCount, keyLength));
+      GenerateTimeResult.Text = "Генерация данных...";
+
+      var generationTime = await Task.Run(() =>
+        _dataGenerator.GenerateTestData(recordCount, keyLength)
+      );
+
+      _lastGenerationTime = generationTime;
+      GenerateTimeResult.Text = $"Время генерации: {generationTime.TotalMilliseconds:F2} мс";
+
       await ShowMessage("Данные успешно сгенерированы!");
     }
     catch (Exception ex)

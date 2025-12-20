@@ -30,6 +30,9 @@
                 <Button Content="Сгенерировать данные" 
                         Click="GenerateData_Click"
                         HorizontalAlignment="Left"/>
+                
+                <TextBlock x:Name="GenerateTimeResult" 
+                           Text="Время генерации: -"/>
             </StackPanel>
         </Border>
         

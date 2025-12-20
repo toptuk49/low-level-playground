@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Diagnostics;
 using BucketJoin.Domain;
 using Microsoft.Data.Sqlite;
 
@@ -9,14 +10,19 @@ public class DataGenerator : IDataGenerator
 {
   private string ConnectionString => DatabaseConfiguration.GetConnectionString();
 
-  public void GenerateTestData(int recordCount, int keyLength = 2)
+  public TimeSpan GenerateTestData(int recordCount, int keyLength = 2)
   {
+    var stopwatch = Stopwatch.StartNew();
+
     EnsureDatabaseExists();
     ClearTables();
 
     GenerateTableData(recordCount, "TableA", keyLength);
     GenerateTableData(recordCount, "TableB", keyLength);
     SortTables();
+
+    stopwatch.Stop();
+    return stopwatch.Elapsed;
   }
 
   private void EnsureDatabaseExists()
@@ -25,7 +31,7 @@ public class DataGenerator : IDataGenerator
     connection.Open();
 
     var createTables =
-        @"
+      @"
         CREATE TABLE IF NOT EXISTS TableA (
             KeyField TEXT,
             Value1 INTEGER,
@@ -96,33 +102,30 @@ public class DataGenerator : IDataGenerator
       if (tableName == "TableA")
       {
         using var cmd = new SqliteCommand(
-            "INSERT INTO TableA (KeyField, Value1, Value2, Description) VALUES (@key, @value1, @value2, @desc)",
-            connection,
-            transaction
+          "INSERT INTO TableA (KeyField, Value1, Value2, Description) VALUES (@key, @value1, @value2, @desc)",
+          connection,
+          transaction
         );
 
         cmd.Parameters.AddWithValue("@key", key);
         cmd.Parameters.AddWithValue("@value1", random.Next(1, 100));
         cmd.Parameters.AddWithValue("@value2", random.NextDouble() * 100);
-        cmd.Parameters.AddWithValue(
-            "@desc",
-            descriptions[random.Next(descriptions.Length)]
-        );
+        cmd.Parameters.AddWithValue("@desc", descriptions[random.Next(descriptions.Length)]);
         cmd.ExecuteNonQuery();
       }
       else // TableB
       {
         using var cmd = new SqliteCommand(
-            "INSERT INTO TableB (KeyField, Value3, Value4, Status) VALUES (@key, @value3, @value4, @status)",
-            connection,
-            transaction
+          "INSERT INTO TableB (KeyField, Value3, Value4, Status) VALUES (@key, @value3, @value4, @status)",
+          connection,
+          transaction
         );
 
         cmd.Parameters.AddWithValue("@key", key);
         cmd.Parameters.AddWithValue("@value3", random.Next(1, 100));
         cmd.Parameters.AddWithValue(
-            "@value4",
-            DateTime.Now.AddDays(-random.Next(0, 365)).ToString("yyyy-MM-dd HH:mm:ss")
+          "@value4",
+          DateTime.Now.AddDays(-random.Next(0, 365)).ToString("yyyy-MM-dd HH:mm:ss")
         );
         cmd.Parameters.AddWithValue("@status", statuses[random.Next(statuses.Length)]);
         cmd.ExecuteNonQuery();
@@ -143,12 +146,12 @@ public class DataGenerator : IDataGenerator
     clearB.ExecuteNonQuery();
 
     using var sortA = new SqliteCommand(
-        "INSERT INTO TableA_srt SELECT * FROM TableA ORDER BY KeyField",
-        connection
+      "INSERT INTO TableA_srt SELECT * FROM TableA ORDER BY KeyField",
+      connection
     );
     using var sortB = new SqliteCommand(
-        "INSERT INTO TableB_srt SELECT * FROM TableB ORDER BY KeyField",
-        connection
+      "INSERT INTO TableB_srt SELECT * FROM TableB ORDER BY KeyField",
+      connection
     );
 
     sortA.ExecuteNonQuery();
@@ -161,12 +164,12 @@ public class DataGenerator : IDataGenerator
     connection.Open();
 
     var clearCommand = new SqliteCommand(
-        @"DELETE FROM TableA;
+      @"DELETE FROM TableA;
               DELETE FROM TableB;
               DELETE FROM TableA_srt;
               DELETE FROM TableB_srt;
               DELETE FROM JoinResult;",
-        connection
+      connection
     );
     clearCommand.ExecuteNonQuery();
   }
